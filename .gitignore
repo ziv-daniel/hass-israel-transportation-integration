@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*.so
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+
+# Environments
+.env
+.venv
+env/
+venv/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Home Assistant
+home-assistant.log
+home-assistant_v2.db
+.storage/
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+
+# Claude Code (not in public repo)
+.claude/
+
+# Development files (not in public repo)
+tests/
+pytest.ini
+requirements_test.txt
+.pre-commit-config.yaml
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/

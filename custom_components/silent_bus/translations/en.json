@@ -1,0 +1,56 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Silent Bus Setup",
+        "description": "Configure your bus station monitoring",
+        "data": {
+          "station_id": "Station Number"
+        },
+        "data_description": {
+          "station_id": "Enter the bus station number (e.g., 24068). You can find station numbers at https://www.bus.co.il"
+        }
+      },
+      "bus_lines": {
+        "title": "Select Bus Lines",
+        "description": "Configure which bus lines to track at {station_name}",
+        "data": {
+          "bus_lines": "Bus Lines"
+        },
+        "data_description": {
+          "bus_lines": "Enter bus line numbers separated by commas (e.g., 249, 40, 605)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the bus API. Please check your internet connection and try again.",
+      "station_not_found": "Station not found. Please check the station number and try again.",
+      "no_lines": "Please enter at least one bus line number.",
+      "unknown": "An unexpected error occurred. Please try again."
+    },
+    "abort": {
+      "already_configured": "This station is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Configure Silent Bus Options",
+        "description": "Modify settings for {station_name}",
+        "data": {
+          "bus_lines": "Bus Lines",
+          "update_interval": "Update Interval (seconds)",
+          "max_arrivals": "Maximum Arrivals to Track"
+        },
+        "data_description": {
+          "bus_lines": "Comma-separated list of bus line numbers",
+          "update_interval": "How often to update data (15-600 seconds)",
+          "max_arrivals": "Number of upcoming arrivals to track per line (1-10)"
+        }
+      }
+    },
+    "error": {
+      "no_lines": "Please enter at least one bus line number."
+    }
+  }
+}

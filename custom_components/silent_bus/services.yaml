@@ -1,0 +1,36 @@
+# Services for Silent Bus integration
+
+refresh_data:
+  name: Refresh data
+  description: Force an immediate refresh of arrival times data for Silent Bus sensors.
+  fields:
+    entity_id:
+      name: Entity ID
+      description: Specific entity to refresh. If not provided, all Silent Bus integrations will be refreshed.
+      required: false
+      example: "sensor.bus_station_azrieli_center_line_249"
+      selector:
+        entity:
+          filter:
+            integration: silent_bus
+
+update_lines:
+  name: Update bus lines
+  description: Dynamically update the bus lines being tracked for a station. Only works for bus and light rail sensors, not trains.
+  fields:
+    entity_id:
+      name: Entity ID
+      description: The Silent Bus entity to update.
+      required: true
+      example: "sensor.bus_station_azrieli_center_line_249"
+      selector:
+        entity:
+          filter:
+            integration: silent_bus
+    lines:
+      name: Bus lines
+      description: Comma-separated list of bus line numbers to track (e.g., "249, 40, 605").
+      required: true
+      example: "249, 40, 605"
+      selector:
+        text:

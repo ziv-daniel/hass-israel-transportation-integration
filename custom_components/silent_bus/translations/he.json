@@ -1,0 +1,56 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "הגדרת Silent Bus",
+        "description": "הגדר מעקב אחר תחנת אוטובוס",
+        "data": {
+          "station_id": "מספר תחנה"
+        },
+        "data_description": {
+          "station_id": "הזן את מספר תחנת האוטובוס (לדוגמה: 24068). ניתן למצוא מספרי תחנות באתר https://www.bus.co.il"
+        }
+      },
+      "bus_lines": {
+        "title": "בחירת קווי אוטובוס",
+        "description": "הגדר אילו קווי אוטובוס לעקוב ב-{station_name}",
+        "data": {
+          "bus_lines": "קווי אוטובוס"
+        },
+        "data_description": {
+          "bus_lines": "הזן מספרי קווים מופרדים בפסיקים (לדוגמה: 249, 40, 605)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "נכשל בהתחברות ל-API של האוטובוסים. אנא בדוק את חיבור האינטרנט ונסה שוב.",
+      "station_not_found": "התחנה לא נמצאה. אנא בדוק את מספר התחנה ונסה שוב.",
+      "no_lines": "אנא הזן לפחות מספר קו אחד.",
+      "unknown": "אירעה שגיאה בלתי צפויה. אנא נסה שוב."
+    },
+    "abort": {
+      "already_configured": "תחנה זו כבר מוגדרת."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "הגדרות Silent Bus",
+        "description": "שינוי הגדרות עבור {station_name}",
+        "data": {
+          "bus_lines": "קווי אוטובוס",
+          "update_interval": "מרווח עדכון (שניות)",
+          "max_arrivals": "מספר הגעות מקסימלי למעקב"
+        },
+        "data_description": {
+          "bus_lines": "רשימת מספרי קווים מופרדים בפסיקים",
+          "update_interval": "כמה פעמים לעדכן נתונים (15-600 שניות)",
+          "max_arrivals": "כמות הגעות עתידיות למעקב לכל קו (1-10)"
+        }
+      }
+    },
+    "error": {
+      "no_lines": "אנא הזן לפחות מספר קו אחד."
+    }
+  }
+}
