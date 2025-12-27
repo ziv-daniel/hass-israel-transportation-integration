@@ -2,8 +2,8 @@
   "config": {
     "step": {
       "user": {
-        "title": "Silent Bus Setup",
-        "description": "Configure your bus station monitoring",
+        "title": "Israel Transportation Setup",
+        "description": "Configure your transportation monitoring",
         "data": {
           "station_id": "Station Number"
         },
@@ -35,7 +35,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "Configure Silent Bus Options",
+        "title": "Configure Israel Transportation Options",
         "description": "Modify settings for {station_name}",
         "data": {
           "bus_lines": "Bus Lines",

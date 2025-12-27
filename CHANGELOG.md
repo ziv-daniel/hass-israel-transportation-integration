@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2025-12-27
+
+### Changed
+- **Integration Name**: Renamed from "Silent Bus" to "Israel Transportation"
+  - Better reflects support for all transportation types (buses, trains, light rail)
+  - More discoverable and professional naming
+  - Updated all UI strings and documentation
+- **Repository URLs**: Updated to point to public repository
+  - Documentation: https://github.com/ziv-daniel/hass-israel-transportation-integration
+  - Issue Tracker: https://github.com/ziv-daniel/hass-israel-transportation-integration/issues
+
+### Note
+- The domain name `silent_bus` remains unchanged to maintain compatibility with existing installations
+- Existing users will see the updated name after upgrading
+
 ## [1.2.0] - 2025-12-25
 
 ### Added

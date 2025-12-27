@@ -1,4 +1,4 @@
-# Silent Bus - Israeli Public Transportation Integration for Home Assistant
+# Israel Transportation - Home Assistant Integration
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/ziv-daniel/hass-israel-transportation-integration.svg)](https://github.com/ziv-daniel/hass-israel-transportation-integration/releases)
@@ -28,10 +28,10 @@ Track Israeli buses, trains, and light rail in real-time with Home Assistant.
 4. Add repository URL: `https://github.com/ziv-daniel/hass-israel-transportation-integration`
 5. Category: **Integration**
 6. Click **Add**
-7. Search for "**Silent Bus**" in HACS and click **Download**
+7. Search for "**Israel Transportation**" in HACS and click **Download**
 8. Restart Home Assistant
 9. Go to **Settings** → **Devices & Services** → **Add Integration**
-10. Search for "**Silent Bus**" and follow the configuration steps
+10. Search for "**Israel Transportation**" and follow the configuration steps
 
 ### Manual Installation
 
@@ -46,7 +46,7 @@ Track Israeli buses, trains, and light rail in real-time with Home Assistant.
 ### Setup
 
 1. Navigate to **Settings** → **Devices & Services** → **Add Integration**
-2. Search for "**Silent Bus**"
+2. Search for "**Israel Transportation**"
 3. Select your transport type:
    - **Bus** - Track bus arrivals at stations
    - **Train** - Plan routes between train stations
