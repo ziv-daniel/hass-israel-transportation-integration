@@ -4,6 +4,8 @@
 [![GitHub Release](https://img.shields.io/github/release/ziv-daniel/hass-israel-transportation-integration.svg)](https://github.com/ziv-daniel/hass-israel-transportation-integration/releases)
 [![License](https://img.shields.io/github/license/ziv-daniel/hass-israel-transportation-integration.svg)](LICENSE)
 
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ziv-daniel&repository=hass-israel-transportation-integration&category=integration)
+
 Track Israeli buses, trains, and light rail in real-time with Home Assistant.
 
 ## Features
