@@ -12,6 +12,7 @@ from custom_components.silent_bus.api import (
     ApiConnectionError,
     ApiTimeoutError,
     BusNearbyApiClient,
+    InvalidResponseError,
     StationNotFoundError,
 )
 
@@ -253,3 +254,161 @@ async def test_stop_id_formatting():
     # Check that the URL contains the formatted stop_id
     call_args = mock_session.get.call_args
     assert "1:24068" in call_args[0][0]
+
+
+@pytest.mark.asyncio
+async def test_get_stop_times_list_response():
+    """Test stop times raises error when API returns a list instead of dict."""
+    mock_response = MagicMock()
+    mock_response.json = AsyncMock(return_value=[{"routeShortName": "249"}])
+    mock_response.raise_for_status = MagicMock()
+
+    mock_session = MagicMock(spec=aiohttp.ClientSession)
+    mock_session.get = MagicMock(
+        return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_response))
+    )
+
+    client = BusNearbyApiClient(session=mock_session)
+
+    with pytest.raises(InvalidResponseError) as exc_info:
+        await client.get_stop_times("12664")
+
+    assert "expected dictionary" in str(exc_info.value)
+    assert "list" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_get_stop_times_none_response():
+    """Test stop times raises error when API returns None."""
+    mock_response = MagicMock()
+    mock_response.json = AsyncMock(return_value=None)
+    mock_response.raise_for_status = MagicMock()
+
+    mock_session = MagicMock(spec=aiohttp.ClientSession)
+    mock_session.get = MagicMock(
+        return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_response))
+    )
+
+    client = BusNearbyApiClient(session=mock_session)
+
+    with pytest.raises(InvalidResponseError) as exc_info:
+        await client.get_stop_times("12664")
+
+    assert "expected dictionary" in str(exc_info.value)
+    assert "NoneType" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_get_stop_times_string_response():
+    """Test stop times raises error when API returns a string."""
+    mock_response = MagicMock()
+    mock_response.json = AsyncMock(return_value="Error: Station not found")
+    mock_response.raise_for_status = MagicMock()
+
+    mock_session = MagicMock(spec=aiohttp.ClientSession)
+    mock_session.get = MagicMock(
+        return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_response))
+    )
+
+    client = BusNearbyApiClient(session=mock_session)
+
+    with pytest.raises(InvalidResponseError) as exc_info:
+        await client.get_stop_times("12664")
+
+    assert "expected dictionary" in str(exc_info.value)
+    assert "str" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_validate_station_api_response_success():
+    """Test validate_station_api_response returns True for valid response."""
+    mock_response = MagicMock()
+    mock_response.json = AsyncMock(return_value={"times": []})
+    mock_response.raise_for_status = MagicMock()
+
+    mock_session = MagicMock(spec=aiohttp.ClientSession)
+    mock_session.get = MagicMock(
+        return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_response))
+    )
+
+    client = BusNearbyApiClient(session=mock_session)
+    is_valid, error_msg = await client.validate_station_api_response("24068")
+
+    assert is_valid is True
+    assert error_msg == ""
+
+
+@pytest.mark.asyncio
+async def test_validate_station_api_response_invalid_format():
+    """Test validate_station_api_response returns False for invalid format."""
+    mock_response = MagicMock()
+    mock_response.json = AsyncMock(return_value=[])  # List instead of dict
+    mock_response.raise_for_status = MagicMock()
+
+    mock_session = MagicMock(spec=aiohttp.ClientSession)
+    mock_session.get = MagicMock(
+        return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_response))
+    )
+
+    client = BusNearbyApiClient(session=mock_session)
+    is_valid, error_msg = await client.validate_station_api_response("12664")
+
+    assert is_valid is False
+    assert "expected dictionary" in error_msg
+
+
+@pytest.mark.asyncio
+async def test_validate_station_api_response_connection_error():
+    """Test validate_station_api_response returns False on connection error."""
+    mock_session = MagicMock(spec=aiohttp.ClientSession)
+    mock_session.get = MagicMock(side_effect=aiohttp.ClientError())
+
+    client = BusNearbyApiClient(session=mock_session)
+    is_valid, error_msg = await client.validate_station_api_response("24068")
+
+    assert is_valid is False
+    assert "connect" in error_msg.lower() or "failed" in error_msg.lower()
+
+
+@pytest.mark.asyncio
+async def test_validate_train_route_api_response_success():
+    """Test validate_train_route_api_response returns True for valid response."""
+    mock_response = MagicMock()
+    mock_response.json = AsyncMock(
+        return_value={"plan": {"itineraries": []}}
+    )
+    mock_response.raise_for_status = MagicMock()
+
+    mock_session = MagicMock(spec=aiohttp.ClientSession)
+    mock_session.get = MagicMock(
+        return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_response))
+    )
+
+    client = BusNearbyApiClient(session=mock_session)
+    is_valid, error_msg = await client.validate_train_route_api_response(
+        "3600", "2800"
+    )
+
+    assert is_valid is True
+    assert error_msg == ""
+
+
+@pytest.mark.asyncio
+async def test_validate_train_route_api_response_invalid_format():
+    """Test validate_train_route_api_response returns False for invalid format."""
+    mock_response = MagicMock()
+    mock_response.json = AsyncMock(return_value=[])  # List instead of dict
+    mock_response.raise_for_status = MagicMock()
+
+    mock_session = MagicMock(spec=aiohttp.ClientSession)
+    mock_session.get = MagicMock(
+        return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_response))
+    )
+
+    client = BusNearbyApiClient(session=mock_session)
+    is_valid, error_msg = await client.validate_train_route_api_response(
+        "3600", "2800"
+    )
+
+    assert is_valid is False
+    assert "expected" in error_msg.lower() or "invalid" in error_msg.lower()

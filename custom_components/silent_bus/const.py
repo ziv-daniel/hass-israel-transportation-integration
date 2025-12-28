@@ -79,6 +79,7 @@ ERROR_NETWORK_ERROR: Final = "network_error"
 ERROR_TIMEOUT: Final = "timeout"
 ERROR_CANNOT_CONNECT: Final = "cannot_connect"
 ERROR_UNKNOWN: Final = "unknown"
+ERROR_INVALID_STATION_RESPONSE: Final = "invalid_station_response"
 
 # User agent for API requests
 USER_AGENT: Final = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"

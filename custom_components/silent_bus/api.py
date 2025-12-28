@@ -239,8 +239,15 @@ class BusNearbyApiClient:
             data = await self._make_request(url, params)
 
             if not isinstance(data, dict):
+                response_preview = str(data)[:200] if data else "empty/null"
+                _LOGGER.error(
+                    "Invalid API response for station %s: expected dict, got %s. Response: %s",
+                    stop_id,
+                    type(data).__name__,
+                    response_preview,
+                )
                 raise InvalidResponseError(
-                    "Invalid response format: expected dictionary"
+                    f"Invalid response format: expected dictionary, got {type(data).__name__}"
                 )
 
             # Handle missing 'times' key gracefully - station may have no scheduled service
@@ -292,6 +299,53 @@ class BusNearbyApiClient:
             return result is not None and len(result) > 0
         except BusNearbyApiError:
             return False
+
+    async def validate_station_api_response(
+        self, station_id: str
+    ) -> tuple[bool, str]:
+        """Validate that station returns valid API response format.
+
+        This method tests the actual stop times endpoint to ensure the station
+        returns data in the expected format. Use this during setup to fail early
+        if a station has API compatibility issues.
+
+        Args:
+            station_id: Station ID to validate
+
+        Returns:
+            Tuple of (is_valid, error_message). If valid, error_message is empty.
+        """
+        try:
+            await self.get_stop_times(station_id, number_of_departures=1)
+            return True, ""
+        except InvalidResponseError as err:
+            return False, str(err)
+        except BusNearbyApiError as err:
+            return False, str(err)
+
+    async def validate_train_route_api_response(
+        self, from_station: str, to_station: str
+    ) -> tuple[bool, str]:
+        """Validate that train route returns valid API response format.
+
+        This method tests the train routes endpoint to ensure the stations
+        return data in the expected format. Use this during setup to fail early
+        if a route has API compatibility issues.
+
+        Args:
+            from_station: Origin station ID
+            to_station: Destination station ID
+
+        Returns:
+            Tuple of (is_valid, error_message). If valid, error_message is empty.
+        """
+        try:
+            await self.get_train_routes(from_station, to_station, number_of_routes=1)
+            return True, ""
+        except InvalidResponseError as err:
+            return False, str(err)
+        except BusNearbyApiError as err:
+            return False, str(err)
 
     async def get_train_routes(
         self,

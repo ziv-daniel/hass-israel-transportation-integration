@@ -15,6 +15,7 @@ from homeassistant.data_entry_flow import FlowResult
 from .api import (
     ApiConnectionError,
     BusNearbyApiClient,
+    InvalidResponseError,
 )
 from .gtfs_loader import (
     get_cities_list,
@@ -37,6 +38,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     ERROR_CANNOT_CONNECT,
+    ERROR_INVALID_STATION_RESPONSE,
     ERROR_STATION_NOT_FOUND,
     ERROR_UNKNOWN,
     MAX_SCAN_INTERVAL,
@@ -333,8 +335,29 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             )
                             self._station_id = station_id
 
-                            # Move to next step
-                            return await self.async_step_bus_lines()
+                            # Validate API response format before proceeding
+                            is_valid, error_msg = (
+                                await api_client.validate_station_api_response(
+                                    station_id
+                                )
+                            )
+                            if not is_valid:
+                                _LOGGER.error(
+                                    "Station %s failed API validation: %s",
+                                    station_id,
+                                    error_msg,
+                                )
+                                errors["base"] = ERROR_INVALID_STATION_RESPONSE
+                            else:
+                                # Move to next step
+                                return await self.async_step_bus_lines()
+                    except InvalidResponseError as err:
+                        _LOGGER.error(
+                            "Station %s has invalid API response: %s",
+                            station_id,
+                            err,
+                        )
+                        errors["base"] = ERROR_INVALID_STATION_RESPONSE
                     except Exception:
                         errors["base"] = ERROR_STATION_NOT_FOUND
 
@@ -534,24 +557,47 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             self._from_station = from_station
                             self._to_station = to_station
 
-                            # Create entry for train
-                            await self.async_set_unique_id(
-                                f"{from_station}_{to_station}"
+                            # Validate API response format before proceeding
+                            is_valid, error_msg = (
+                                await api_client.validate_train_route_api_response(
+                                    from_station, to_station
+                                )
                             )
-                            self._abort_if_unique_id_configured()
+                            if not is_valid:
+                                _LOGGER.error(
+                                    "Train route %s → %s failed API validation: %s",
+                                    from_station,
+                                    to_station,
+                                    error_msg,
+                                )
+                                errors["base"] = ERROR_INVALID_STATION_RESPONSE
+                            else:
+                                # Create entry for train
+                                await self.async_set_unique_id(
+                                    f"{from_station}_{to_station}"
+                                )
+                                self._abort_if_unique_id_configured()
 
-                            return self.async_create_entry(
-                                title=f"{self._from_station_name} → {self._to_station_name}",
-                                data={
-                                    CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN,
-                                    CONF_FROM_STATION: self._from_station,
-                                    CONF_TO_STATION: self._to_station,
-                                    CONF_FROM_STATION_NAME: self._from_station_name,
-                                    CONF_TO_STATION_NAME: self._to_station_name,
-                                    CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
-                                    CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
-                                },
-                            )
+                                return self.async_create_entry(
+                                    title=f"{self._from_station_name} → {self._to_station_name}",
+                                    data={
+                                        CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN,
+                                        CONF_FROM_STATION: self._from_station,
+                                        CONF_TO_STATION: self._to_station,
+                                        CONF_FROM_STATION_NAME: self._from_station_name,
+                                        CONF_TO_STATION_NAME: self._to_station_name,
+                                        CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
+                                        CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
+                                    },
+                                )
+                    except InvalidResponseError as err:
+                        _LOGGER.error(
+                            "Train route %s → %s has invalid API response: %s",
+                            from_station,
+                            to_station,
+                            err,
+                        )
+                        errors["base"] = ERROR_INVALID_STATION_RESPONSE
                     except Exception:
                         errors["base"] = ERROR_STATION_NOT_FOUND
 
