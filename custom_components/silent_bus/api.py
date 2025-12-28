@@ -343,7 +343,13 @@ class BusNearbyApiClient:
                     "Dict format arrivals for station %s: %d items, lines: %s",
                     stop_id,
                     len(arrivals),
-                    list(set(a.get("routeShortName", "") for a in arrivals if isinstance(a, dict))),
+                    list(
+                        set(
+                            a.get("routeShortName", "")
+                            for a in arrivals
+                            if isinstance(a, dict)
+                        )
+                    ),
                 )
             else:
                 response_preview = str(data)[:200] if data else "empty/null"
@@ -392,9 +398,7 @@ class BusNearbyApiClient:
         except BusNearbyApiError:
             return False
 
-    async def validate_station_api_response(
-        self, station_id: str
-    ) -> tuple[bool, str]:
+    async def validate_station_api_response(self, station_id: str) -> tuple[bool, str]:
         """Validate that station returns valid API response format.
 
         This method tests the actual stop times endpoint to ensure the station

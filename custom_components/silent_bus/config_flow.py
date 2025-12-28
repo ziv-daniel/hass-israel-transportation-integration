@@ -426,9 +426,10 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 try:
                     async with aiohttp.ClientSession() as session:
                         api_client = BusNearbyApiClient(session)
-                        is_valid, error_msg = (
-                            await api_client.validate_station_api_response(station_id)
-                        )
+                        (
+                            is_valid,
+                            error_msg,
+                        ) = await api_client.validate_station_api_response(station_id)
                         if not is_valid:
                             _LOGGER.error(
                                 "Station %s failed API validation: %s",
@@ -532,10 +533,11 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             self._station_id = station_id
 
                             # Validate API response format before proceeding
-                            is_valid, error_msg = (
-                                await api_client.validate_station_api_response(
-                                    station_id
-                                )
+                            (
+                                is_valid,
+                                error_msg,
+                            ) = await api_client.validate_station_api_response(
+                                station_id
                             )
                             if not is_valid:
                                 _LOGGER.error(
@@ -754,10 +756,11 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             self._to_station = to_station
 
                             # Validate API response format before proceeding
-                            is_valid, error_msg = (
-                                await api_client.validate_train_route_api_response(
-                                    from_station, to_station
-                                )
+                            (
+                                is_valid,
+                                error_msg,
+                            ) = await api_client.validate_train_route_api_response(
+                                from_station, to_station
                             )
                             if not is_valid:
                                 _LOGGER.error(

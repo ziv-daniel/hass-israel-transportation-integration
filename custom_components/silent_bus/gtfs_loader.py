@@ -139,12 +139,14 @@ def get_cities_list(
         else:
             display_name = f"{city_id} ({station_count} stations)"
 
-        cities.append({
-            "id": city_id,
-            "name": display_name,
-            "name_he": city_name_he or city_id,
-            "station_count": station_count,
-        })
+        cities.append(
+            {
+                "id": city_id,
+                "name": display_name,
+                "name_he": city_name_he or city_id,
+                "station_count": station_count,
+            }
+        )
 
     # Sort all cities by Hebrew name (א-ת)
     cities.sort(key=lambda c: c["name_he"])
@@ -194,12 +196,14 @@ def get_all_cities_list() -> List[Dict[str, str]]:
         else:
             display_name = f"{city_id} ({station_count} stations)"
 
-        cities.append({
-            "id": city_id,
-            "name": display_name,
-            "name_he": city_name_he or city_id,
-            "station_count": station_count,
-        })
+        cities.append(
+            {
+                "id": city_id,
+                "name": display_name,
+                "name_he": city_name_he or city_id,
+                "station_count": station_count,
+            }
+        )
 
     # Sort by Hebrew name
     cities.sort(key=lambda c: c["name_he"])
@@ -264,6 +268,33 @@ def search_station_by_id(station_id: str) -> Optional[Dict]:
     return None
 
 
+def get_station_display_name(station_id: str) -> str:
+    """Get a human-readable display name for a station.
+
+    Searches GTFS data and returns a formatted string with city, station name, and ID.
+
+    Args:
+        station_id: Station ID to look up
+
+    Returns:
+        Formatted string like "Jerusalem - שם התחנה (12345)" or just "12345" if not found
+    """
+    try:
+        cities_index = load_cities_index()
+    except FileNotFoundError:
+        return station_id
+
+    # Search through all cities
+    for city_id, city_data in cities_index.items():
+        for station in city_data["stations"]:
+            if station["id"] == station_id:
+                city_name = city_data.get("name_he", city_id)
+                station_name = station.get("name", "Unknown")
+                return f"{city_id} ({city_name}) - {station_name} [{station_id}]"
+
+    return f"Unknown station [{station_id}]"
+
+
 def is_gtfs_data_available() -> bool:
     """Check if GTFS data is available.
 
@@ -310,9 +341,7 @@ def _calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> f
     return R * c
 
 
-def get_nearest_city(
-    home_lat: float, home_lon: float
-) -> Optional[Dict[str, str]]:
+def get_nearest_city(home_lat: float, home_lon: float) -> Optional[Dict[str, str]]:
     """Find the nearest city to the given coordinates.
 
     Calculates the average distance to all stations in each city and
@@ -430,13 +459,15 @@ def get_cities_near_location(
             else:
                 display_name = f"{city_id} ({station_count} stations)"
 
-            cities_with_distance.append({
-                "id": city_id,
-                "name": display_name,
-                "name_he": city_name_he or city_id,
-                "station_count": station_count,
-                "distance_km": round(min_station_distance, 1),
-            })
+            cities_with_distance.append(
+                {
+                    "id": city_id,
+                    "name": display_name,
+                    "name_he": city_name_he or city_id,
+                    "station_count": station_count,
+                    "distance_km": round(min_station_distance, 1),
+                }
+            )
 
     # Sort by distance, closest first
     cities_with_distance.sort(key=lambda c: c["distance_km"])

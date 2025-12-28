@@ -21,6 +21,7 @@ from .const import (
     TRANSPORT_TYPE_BUS,
     TRANSPORT_TYPE_TRAIN,
 )
+from .gtfs_loader import get_station_display_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -79,6 +80,12 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         self.from_station_name = from_station_name
         self.to_station_name = to_station_name
 
+        # Generate display name for logging (includes city, station name, and ID)
+        if station_id:
+            self._station_display = get_station_display_name(station_id)
+        else:
+            self._station_display = None
+
         # Generate unique coordinator name
         if transport_type == TRANSPORT_TYPE_TRAIN:
             coordinator_name = f"{DOMAIN}_{from_station}_{to_station}"
@@ -123,8 +130,8 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             else:
                 # Fetch bus/light rail arrivals
                 _LOGGER.debug(
-                    "Fetching data for station %s, lines: %s",
-                    self.station_id,
+                    "Fetching data for %s, lines: %s",
+                    self._station_display,
                     self.bus_lines,
                 )
 
@@ -135,17 +142,17 @@ class SilentBusCoordinator(DataUpdateCoordinator):
                 )
 
                 _LOGGER.debug(
-                    "Received %d arrivals from API for station %s",
+                    "Received %d arrivals from API for %s",
                     len(arrivals) if arrivals else 0,
-                    self.station_id,
+                    self._station_display,
                 )
 
                 # Process arrivals into structured data
                 processed_data = self._process_arrivals(arrivals)
 
                 _LOGGER.debug(
-                    "Processed data for station %s: lines found=%s, tracking lines=%s",
-                    self.station_id,
+                    "Processed data for %s: lines found=%s, tracking lines=%s",
+                    self._station_display,
                     list(processed_data.keys()) if processed_data else [],
                     self.bus_lines,
                 )
@@ -153,17 +160,17 @@ class SilentBusCoordinator(DataUpdateCoordinator):
                 # Log warning if no data for tracked lines
                 if not processed_data and arrivals:
                     _LOGGER.warning(
-                        "Station %s: API returned %d arrivals but none matched tracked lines %s. "
+                        "%s: API returned %d arrivals but none matched tracked lines %s. "
                         "Available lines in response: %s",
-                        self.station_id,
+                        self._station_display,
                         len(arrivals),
                         self.bus_lines,
                         list(set(a.get("routeShortName", "?") for a in arrivals)),
                     )
                 elif not processed_data and not arrivals:
                     _LOGGER.info(
-                        "Station %s: No arrivals returned by API (station may have no service at this time)",
-                        self.station_id,
+                        "%s: No arrivals returned by API (station may have no service at this time)",
+                        self._station_display,
                     )
 
             # Adjust update interval based on data
