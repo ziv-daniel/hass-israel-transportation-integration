@@ -621,40 +621,13 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if station:
                 self._from_station_name = station["name_en"]
-
-                # Resolve Israel Railways code to BusNearby stop_id by searching
-                # by Hebrew station name (more reliable than using rail codes)
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        api_client = BusNearbyApiClient(session)
-                        # Search by Hebrew name to find BusNearby stop_id
-                        search_results = await api_client.search_station(
-                            station["name_he"]
-                        )
-                        if search_results:
-                            # Use the BusNearby stop_id for API calls
-                            self._from_station = search_results[0].get(
-                                "stop_id", station_id
-                            )
-                            _LOGGER.debug(
-                                "Train FROM station: rail_code=%s -> stop_id=%s (name: %s)",
-                                station_id,
-                                self._from_station,
-                                station["name_he"],
-                            )
-                        else:
-                            # Fallback to rail code if search fails
-                            self._from_station = station_id
-                            _LOGGER.warning(
-                                "Could not resolve BusNearby ID for train station %s (%s)",
-                                station_id,
-                                station["name_he"],
-                            )
-                except Exception as err:
-                    _LOGGER.warning(
-                        "Failed to resolve train station %s: %s", station_id, err
-                    )
-                    self._from_station = station_id
+                # Use rail station code directly - the train API expects rail codes
+                self._from_station = station_id
+                _LOGGER.debug(
+                    "Train FROM station: rail_code=%s, name=%s",
+                    station_id,
+                    station["name_en"],
+                )
 
                 # Move to TO station selection
                 return await self.async_step_train_select_to()
@@ -709,38 +682,22 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if station:
                 self._to_station_name = station["name_en"]
+                # Use rail station code directly - the train API expects rail codes
+                self._to_station = station_id
+                _LOGGER.debug(
+                    "Train TO station: rail_code=%s, name=%s",
+                    station_id,
+                    station["name_en"],
+                )
 
-                # Resolve Israel Railways code to BusNearby stop_id
-                try:
-                    async with aiohttp.ClientSession() as session:
-                        api_client = BusNearbyApiClient(session)
-                        # Search by Hebrew name to find BusNearby stop_id
-                        search_results = await api_client.search_station(
-                            station["name_he"]
-                        )
-                        if search_results:
-                            self._to_station = search_results[0].get(
-                                "stop_id", station_id
-                            )
-                            _LOGGER.debug(
-                                "Train TO station: rail_code=%s -> stop_id=%s (name: %s)",
-                                station_id,
-                                self._to_station,
-                                station["name_he"],
-                            )
-                        else:
-                            self._to_station = station_id
-                            _LOGGER.warning(
-                                "Could not resolve BusNearby ID for train station %s (%s)",
-                                station_id,
-                                station["name_he"],
-                            )
-
-                        # Validate: FROM and TO must be different
-                        if self._from_station == self._to_station:
-                            errors["to_station"] = "cannot_be_same"
-                        else:
-                            # Validate train route API response before creating entry
+                # Validate: FROM and TO must be different
+                if self._from_station == self._to_station:
+                    errors["to_station"] = "cannot_be_same"
+                else:
+                    # Validate train route API response before creating entry
+                    try:
+                        async with aiohttp.ClientSession() as session:
+                            api_client = BusNearbyApiClient(session)
                             (
                                 is_valid,
                                 error_msg,
@@ -774,11 +731,11 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                         CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
                                     },
                                 )
-                except ApiConnectionError:
-                    errors["base"] = ERROR_CANNOT_CONNECT
-                except Exception as err:
-                    _LOGGER.exception("Failed to validate train route: %s", err)
-                    errors["base"] = ERROR_UNKNOWN
+                    except ApiConnectionError:
+                        errors["base"] = ERROR_CANNOT_CONNECT
+                    except Exception as err:
+                        _LOGGER.exception("Failed to validate train route: %s", err)
+                        errors["base"] = ERROR_UNKNOWN
 
         # Get train stations list (exclude the FROM station)
         stations_list = get_train_stations_list()
