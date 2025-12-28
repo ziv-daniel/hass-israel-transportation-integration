@@ -449,7 +449,9 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     errors["to_station"] = "cannot_be_same"
                 else:
                     # Create entry for train
-                    await self.async_set_unique_id(f"{self._from_station}_{self._to_station}")
+                    await self.async_set_unique_id(
+                        f"{self._from_station}_{self._to_station}"
+                    )
                     self._abort_if_unique_id_configured()
 
                     return self.async_create_entry(
@@ -488,7 +490,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={
                 "from_station": self._from_station_name,
-                "train_help": f"Select the destination (TO) train station from {self._from_station_name}"
+                "train_help": f"Select the destination (TO) train station from {self._from_station_name}",
             },
         )
 
@@ -533,7 +535,9 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             self._to_station = to_station
 
                             # Create entry for train
-                            await self.async_set_unique_id(f"{from_station}_{to_station}")
+                            await self.async_set_unique_id(
+                                f"{from_station}_{to_station}"
+                            )
                             self._abort_if_unique_id_configured()
 
                             return self.async_create_entry(

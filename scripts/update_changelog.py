@@ -5,6 +5,7 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
+
 def update_changelog(version: str, message: str):
     """Add new version entry to CHANGELOG.md.
 
@@ -38,8 +39,9 @@ def update_changelog(version: str, message: str):
     lines.insert(insert_idx, new_entry)
 
     # Write back
-    changelog_path.write_text('\n'.join(lines))
+    changelog_path.write_text("\n".join(lines))
     print(f"Updated CHANGELOG.md with version {version}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -54,7 +54,7 @@ def load_cities_index() -> Dict:
 
     _LOGGER.info(f"Loading GTFS cities index from {index_path}")
 
-    with open(index_path, 'r', encoding='utf-8') as f:
+    with open(index_path, "r", encoding="utf-8") as f:
         _CITIES_INDEX_CACHE = json.load(f)
 
     _LOGGER.info(
@@ -86,26 +86,23 @@ def get_cities_list() -> List[Dict[str, str]]:
 
     cities = []
     for city_id, city_data in cities_index.items():
-        station_count = len(city_data['stations'])
+        station_count = len(city_data["stations"])
 
         # Skip "Other" category in main list (can be accessed via manual entry)
         if city_id == "Other":
             continue
 
         # Build bilingual city name if Hebrew name is available
-        city_name_he = city_data.get('name_he', '')
+        city_name_he = city_data.get("name_he", "")
         if city_name_he:
             display_name = f"{city_id} / {city_name_he} ({station_count} stations)"
         else:
             display_name = f"{city_id} ({station_count} stations)"
 
-        cities.append({
-            'id': city_id,
-            'name': display_name
-        })
+        cities.append({"id": city_id, "name": display_name})
 
     # Sort alphabetically by city name
-    cities.sort(key=lambda c: c['id'])
+    cities.sort(key=lambda c: c["id"])
 
     return cities
 
@@ -133,14 +130,16 @@ def get_stations_for_city(city_id: str) -> List[Dict[str, str]]:
     try:
         cities_index = load_cities_index()
     except FileNotFoundError:
-        _LOGGER.warning(f"GTFS data not available, returning empty stations list for {city_id}")
+        _LOGGER.warning(
+            f"GTFS data not available, returning empty stations list for {city_id}"
+        )
         return []
 
     if city_id not in cities_index:
         _LOGGER.warning(f"City '{city_id}' not found in GTFS index")
         return []
 
-    return cities_index[city_id]['stations']
+    return cities_index[city_id]["stations"]
 
 
 def search_station_by_id(station_id: str) -> Optional[Dict]:
@@ -159,8 +158,8 @@ def search_station_by_id(station_id: str) -> Optional[Dict]:
 
     # Search through all cities
     for city_data in cities_index.values():
-        for station in city_data['stations']:
-            if station['id'] == station_id:
+        for station in city_data["stations"]:
+            if station["id"] == station_id:
                 return station
 
     return None
