@@ -134,8 +134,37 @@ class SilentBusCoordinator(DataUpdateCoordinator):
                     number_of_departures=self.max_arrivals,
                 )
 
+                _LOGGER.debug(
+                    "Received %d arrivals from API for station %s",
+                    len(arrivals) if arrivals else 0,
+                    self.station_id,
+                )
+
                 # Process arrivals into structured data
                 processed_data = self._process_arrivals(arrivals)
+
+                _LOGGER.debug(
+                    "Processed data for station %s: lines found=%s, tracking lines=%s",
+                    self.station_id,
+                    list(processed_data.keys()) if processed_data else [],
+                    self.bus_lines,
+                )
+
+                # Log warning if no data for tracked lines
+                if not processed_data and arrivals:
+                    _LOGGER.warning(
+                        "Station %s: API returned %d arrivals but none matched tracked lines %s. "
+                        "Available lines in response: %s",
+                        self.station_id,
+                        len(arrivals),
+                        self.bus_lines,
+                        list(set(a.get("routeShortName", "?") for a in arrivals)),
+                    )
+                elif not processed_data and not arrivals:
+                    _LOGGER.info(
+                        "Station %s: No arrivals returned by API (station may have no service at this time)",
+                        self.station_id,
+                    )
 
             # Adjust update interval based on data
             self._adjust_update_interval(processed_data)

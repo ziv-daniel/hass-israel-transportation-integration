@@ -75,7 +75,24 @@
       "Bash(ruff format:*)",
       "Bash(pip uninstall:*)",
       "Bash(C:Python39Scriptsruff.exe check --fix .)",
-      "Bash(C:Python39Scriptsruff.exe format .)"
+      "Bash(C:Python39Scriptsruff.exe format .)",
+      "Bash(dir:*)",
+      "Bash(\"C:\\\\Users\\\\zivda\\\\AppData\\\\Roaming\\\\Python\\\\Python39\\\\Scripts\\\\ruff.exe\" check --fix .)",
+      "Bash(\"C:\\\\Users\\\\zivda\\\\AppData\\\\Roaming\\\\Python\\\\Python39\\\\Scripts\\\\ruff.exe\" format .)",
+      "Bash(gh workflow:*)",
+      "Bash(C:UserszivdaAppDataRoamingPythonPython39Scriptsruff.exe check --fix \"C:\\\\Repo\\\\israel bus integration\\\\israel-bus-integration\")",
+      "Bash(C:UserszivdaAppDataRoamingPythonPython39Scriptsruff.exe format \"C:\\\\Repo\\\\israel bus integration\\\\israel-bus-integration\")",
+      "Bash(\"C:\\\\Users\\\\zivda\\\\AppData\\\\Roaming\\\\Python\\\\Python39\\\\Scripts\\\\ruff.exe\" check --fix \"C:\\\\Repo\\\\israel bus integration\\\\israel-bus-integration\")",
+      "Bash(\"C:\\\\Users\\\\zivda\\\\AppData\\\\Roaming\\\\Python\\\\Python39\\\\Scripts\\\\ruff.exe\" format \"C:\\\\Repo\\\\israel bus integration\\\\israel-bus-integration\")",
+      "Bash(\"C:\\\\Users\\\\zivda\\\\AppData\\\\Roaming\\\\Python\\\\Python39\\\\Scripts\\\\ruff.exe\" check \"C:\\\\Repo\\\\israel bus integration\\\\israel-bus-integration\\\\custom_components\\\\silent_bus\\\\api.py\" \"C:\\\\Repo\\\\israel bus integration\\\\israel-bus-integration\\\\custom_components\\\\silent_bus\\\\config_flow.py\")",
+      "Bash(\"C:\\\\Users\\\\zivda\\\\AppData\\\\Roaming\\\\Python\\\\Python39\\\\Scripts\\\\ruff.exe\" check \"C:\\\\Repo\\\\israel bus integration\\\\israel-bus-integration\\\\tests\\\\unit\\\\test_api.py\" \"C:\\\\Repo\\\\israel bus integration\\\\israel-bus-integration\\\\custom_components\\\\silent_bus\\\\const.py\")",
+      "Bash(xargs:*)",
+      "Bash(find:*)",
+      "Bash(\"C:\\\\Users\\\\zivda\\\\AppData\\\\Roaming\\\\Python\\\\Python39\\\\Scripts\\\\ruff.exe\" check \"C:\\\\Repo\\\\israel bus integration\\\\israel-bus-integration\\\\custom_components\\\\silent_bus\\\\gtfs_loader.py\" \"C:\\\\Repo\\\\israel bus integration\\\\israel-bus-integration\\\\custom_components\\\\silent_bus\\\\config_flow.py\")",
+      "Bash(git remote add:*)",
+      "Bash(git fetch:*)",
+      "mcp__plugin_playwright_playwright__browser_type",
+      "Bash(\"C:\\\\Users\\\\zivda\\\\AppData\\\\Roaming\\\\Python\\\\Python39\\\\Scripts\\\\ruff.exe\" check \"C:\\\\Repo\\\\israel bus integration\\\\israel-bus-integration\\\\custom_components\\\\silent_bus\\\\api.py\" \"C:\\\\Repo\\\\israel bus integration\\\\israel-bus-integration\\\\custom_components\\\\silent_bus\\\\config_flow.py\" \"C:\\\\Repo\\\\israel bus integration\\\\israel-bus-integration\\\\custom_components\\\\silent_bus\\\\gtfs_loader.py\")"
     ]
   }
 }

@@ -301,6 +301,13 @@ class BusNearbyApiClient:
         try:
             data = await self._make_request(url, params)
 
+            _LOGGER.debug(
+                "Raw API response for station %s: type=%s, data=%s",
+                stop_id,
+                type(data).__name__,
+                str(data)[:500] if data else "None",
+            )
+
             # Handle both response formats:
             # 1. Dictionary with "times" key: {"times": [...]}
             # 2. Direct list of pattern/stoptimes: [{pattern: {...}, stoptimes: [...]}, ...]
@@ -312,12 +319,19 @@ class BusNearbyApiClient:
                     len(data),
                 )
                 arrivals = self._normalize_pattern_response(data)
+                _LOGGER.debug(
+                    "Normalized arrivals for station %s: %d items, lines: %s",
+                    stop_id,
+                    len(arrivals),
+                    list(set(a.get("routeShortName", "") for a in arrivals)),
+                )
             elif isinstance(data, dict):
                 # API returned dictionary format
                 if "times" not in data:
                     _LOGGER.debug(
-                        "Station %s has no scheduled times (no service or no routes)",
+                        "Station %s has no scheduled times (no service or no routes). Keys in response: %s",
                         stop_id,
+                        list(data.keys()) if data else "None",
                     )
                     return []
                 arrivals = data["times"]
@@ -325,6 +339,12 @@ class BusNearbyApiClient:
                     raise InvalidResponseError(
                         "Invalid response format: 'times' is not a list"
                     )
+                _LOGGER.debug(
+                    "Dict format arrivals for station %s: %d items, lines: %s",
+                    stop_id,
+                    len(arrivals),
+                    list(set(a.get("routeShortName", "") for a in arrivals if isinstance(a, dict))),
+                )
             else:
                 response_preview = str(data)[:200] if data else "empty/null"
                 _LOGGER.error(
