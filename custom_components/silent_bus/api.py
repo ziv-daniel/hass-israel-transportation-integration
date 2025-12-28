@@ -247,7 +247,7 @@ class BusNearbyApiClient:
             if "times" not in data:
                 _LOGGER.debug(
                     "Station %s has no scheduled times (no service or no routes)",
-                    stop_id
+                    stop_id,
                 )
                 return []
 

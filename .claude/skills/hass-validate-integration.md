@@ -1,140 +1,219 @@
-# Home Assistant Integration Validation
+# Israel Transportation Integration - Validation
 
-Validate the Silent Bus integration against Home Assistant and HACS standards.
+Validate the Israel Transportation (Silent Bus) integration against Home Assistant and HACS standards with intelligent issue detection and auto-fix capabilities.
 
 ## Usage
 
 - `/hass-validate-integration` - Run all validation checks
 - `/hass-validate-integration --strict` - Run with stricter checks for release
-- `/hass-validate-integration --hassfest-only` - Only run hassfest validation
-- `/hass-validate-integration --hacs-only` - Only run HACS validation
+- `/hass-validate-integration --fix` - Auto-fix common issues
 
-## What it does
+## Smart Validation Workflow
 
-1. Validates `manifest.json` structure and required fields
-2. Checks `strings.json` and translations completeness
-3. Verifies HACS requirements in `hacs.json`
-4. Validates version consistency across files
-5. Checks for required integration files
-6. Validates service definitions in `services.yaml`
-7. Runs hassfest validation (if available locally)
+### Phase 1: Manifest Validation
 
-## Commands executed
+Check `custom_components/silent_bus/manifest.json`:
 
 ```bash
-# Step 1: Check manifest.json validity
-python -c "import json; json.load(open('custom_components/silent_bus/manifest.json'))"
-
-# Step 2: Verify required files exist
-ls custom_components/silent_bus/__init__.py
-ls custom_components/silent_bus/manifest.json
-ls custom_components/silent_bus/strings.json
-ls custom_components/silent_bus/translations/en.json
-
-# Step 3: Check version consistency
-VERSION=$(python -c "import json; print(json.load(open('custom_components/silent_bus/manifest.json'))['version'])")
-echo "Manifest version: $VERSION"
-grep -q "## \[$VERSION\]" CHANGELOG.md && echo "CHANGELOG matches" || echo "WARNING: Version mismatch in CHANGELOG"
-
-# Step 4: Validate HACS configuration
-python -c "import json; data=json.load(open('hacs.json')); assert 'name' in data; assert 'homeassistant' in data"
-
-# Step 5: Check translation completeness
 python -c "
 import json
-en = json.load(open('custom_components/silent_bus/translations/en.json'))
-he = json.load(open('custom_components/silent_bus/translations/he.json'))
-assert en.keys() == he.keys(), 'Translation keys mismatch'
-print('Translation files are consistent')
+with open('custom_components/silent_bus/manifest.json') as f:
+    m = json.load(f)
+    required = ['domain', 'name', 'version', 'documentation', 'issue_tracker', 'iot_class', 'requirements', 'codeowners']
+    missing = [k for k in required if k not in m]
+    if missing:
+        print(f'Missing required fields: {missing}')
+    else:
+        print(f'Manifest OK - version {m[\"version\"]}')
 "
 ```
 
-## Validation checklist
+**Expected Fields:**
+| Field | Current Value | Validation |
+|-------|--------------|------------|
+| domain | `silent_bus` | Must match folder name |
+| name | `Israel Transportation` | User-facing name |
+| version | `1.3.3` | Semver format |
+| documentation | GitHub URL | Must be valid URL |
+| issue_tracker | GitHub issues URL | Must be valid URL |
+| iot_class | `cloud_polling` | Valid HA IoT class |
+| requirements | `["aiohttp>=3.9.0"]` | External dependencies |
+| codeowners | `["@ziv-daniel"]` | GitHub usernames |
 
-### manifest.json Requirements
-- [x] `domain` field present and matches directory name
-- [x] `name` field present
-- [x] `version` field present and follows semver
-- [x] `documentation` URL is valid
-- [x] `issue_tracker` URL is valid
-- [x] `iot_class` is set correctly (`cloud_polling`)
-- [x] `requirements` lists all external dependencies
-- [x] `codeowners` includes GitHub username
+### Phase 2: HACS Validation
 
-### HACS Requirements (hacs.json)
-- [x] `name` field matches integration name
-- [x] `homeassistant` minimum version specified
-- [x] `render_readme` set to true
+Check `hacs.json`:
 
-### Translation Requirements
-- [x] `strings.json` exists with all config flow steps
-- [x] `translations/en.json` exists and complete
-- [x] `translations/he.json` exists and matches English keys
-- [x] All config flow steps have translations
-
-### File Structure Requirements
-- [x] `__init__.py` with async_setup_entry
-- [x] `config_flow.py` with ConfigFlow class
-- [x] `const.py` with DOMAIN constant
-- [x] `manifest.json` with all required fields
-- [x] `strings.json` for UI strings
-- [x] `services.yaml` for service definitions
-
-## Common issues
-
-**Issue**: `manifest.json` validation fails
-**Solution**: Ensure all required fields are present: domain, name, version, documentation, issue_tracker, iot_class, requirements
-
-**Issue**: Translation mismatch between en.json and he.json
-**Solution**: Ensure both translation files have the same keys. Run:
 ```bash
-python -c "import json; en=set(json.load(open('custom_components/silent_bus/translations/en.json')).keys()); he=set(json.load(open('custom_components/silent_bus/translations/he.json')).keys()); print('Missing in he:', en-he); print('Missing in en:', he-en)"
+python -c "
+import json
+with open('hacs.json') as f:
+    h = json.load(f)
+    required = ['name', 'homeassistant']
+    missing = [k for k in required if k not in h]
+    if missing:
+        print(f'Missing: {missing}')
+    else:
+        print(f'HACS OK - min HA version: {h[\"homeassistant\"]}')
+"
 ```
 
-**Issue**: Version mismatch between manifest.json and CHANGELOG.md
-**Solution**: Update the version in manifest.json to match the latest version in CHANGELOG.md, or vice versa
+### Phase 3: Translation Validation
 
-**Issue**: HACS validation fails
-**Solution**: Ensure `hacs.json` has `name` and `homeassistant` fields. Remove invalid fields like `domains` (removed in recent commits)
+Check translation completeness:
 
-**Issue**: hassfest not available locally
-**Solution**: hassfest runs in GitHub Actions. Push to GitHub and check the hassfest workflow results
-
-## GitHub Actions integration
-
-This integration uses GitHub Actions for automated validation:
-
-- **hassfest.yaml**: Validates integration structure daily and on push/PR
-- **hacs.yaml**: Validates HACS requirements
-
-To manually trigger validation:
 ```bash
+python -c "
+import json
+import os
+
+strings = json.load(open('custom_components/silent_bus/strings.json'))
+en = json.load(open('custom_components/silent_bus/translations/en.json'))
+he = json.load(open('custom_components/silent_bus/translations/he.json'))
+
+def get_keys(d, prefix=''):
+    keys = set()
+    for k, v in d.items():
+        key = f'{prefix}.{k}' if prefix else k
+        if isinstance(v, dict):
+            keys.update(get_keys(v, key))
+        else:
+            keys.add(key)
+    return keys
+
+en_keys = get_keys(en)
+he_keys = get_keys(he)
+
+missing_in_he = en_keys - he_keys
+missing_in_en = he_keys - en_keys
+
+if missing_in_he:
+    print(f'Missing in Hebrew: {missing_in_he}')
+if missing_in_en:
+    print(f'Missing in English: {missing_in_en}')
+if not missing_in_he and not missing_in_en:
+    print('Translations OK - all keys match')
+"
+```
+
+### Phase 4: Version Consistency
+
+```bash
+python -c "
+import json
+import re
+
+# Get manifest version
+manifest = json.load(open('custom_components/silent_bus/manifest.json'))
+version = manifest['version']
+
+# Check CHANGELOG
+with open('CHANGELOG.md') as f:
+    changelog = f.read()
+    if f'## [{version}]' in changelog or f'## [v{version}]' in changelog:
+        print(f'CHANGELOG OK - version {version} documented')
+    else:
+        print(f'WARNING: Version {version} not in CHANGELOG.md')
+"
+```
+
+### Phase 5: File Structure Validation
+
+```bash
+# Required files
+ls -la custom_components/silent_bus/__init__.py
+ls -la custom_components/silent_bus/manifest.json
+ls -la custom_components/silent_bus/config_flow.py
+ls -la custom_components/silent_bus/const.py
+ls -la custom_components/silent_bus/sensor.py
+ls -la custom_components/silent_bus/strings.json
+ls -la custom_components/silent_bus/translations/en.json
+ls -la custom_components/silent_bus/translations/he.json
+ls -la hacs.json
+ls -la CHANGELOG.md
+```
+
+## Common Issues & Auto-Fixes
+
+### Issue 1: Version Mismatch
+**Symptom:** Manifest version doesn't match CHANGELOG
+
+**Auto-fix:**
+```python
+# Update CHANGELOG with new version entry
+import datetime
+today = datetime.date.today().isoformat()
+version = "1.3.3"
+entry = f"\n## [{version}] - {today}\n\n### Changed\n- Updated version\n"
+# Add to CHANGELOG.md after first line
+```
+
+### Issue 2: Missing Translation Keys
+**Symptom:** Hebrew translation missing keys
+
+**Auto-fix:** Copy English key with `TODO: Translate` marker
+
+### Issue 3: Invalid IoT Class
+**Symptom:** `iot_class` not in allowed values
+
+**Valid values:** `cloud_polling`, `cloud_push`, `local_polling`, `local_push`, `calculated`, `assumed_state`
+
+### Issue 4: HACS deprecated fields
+**Symptom:** Warning about deprecated fields like `domains`
+
+**Auto-fix:** Remove deprecated fields from `hacs.json`
+
+## GitHub Actions Validation
+
+These validations run automatically in CI:
+
+```bash
+# Check hassfest workflow status
+gh run list --workflow=hassfest.yaml --limit 3
+
+# Check HACS workflow status
+gh run list --workflow=hacs.yaml --limit 3
+
+# Trigger manual validation
 gh workflow run hassfest.yaml
 gh workflow run hacs.yaml
 ```
 
-## Pre-release validation
+## Pre-Release Checklist
 
-Before creating a release, ensure:
+Before tagging a release, verify:
 
-1. Version updated in `manifest.json`
-2. Matching version entry in `CHANGELOG.md`
-3. All tests passing (`/hass-test-integration`)
-4. hassfest validation passing
-5. HACS validation passing
-6. No linting errors (`pre-commit run --all-files`)
+- [ ] **Version updated:** `manifest.json` has new version
+- [ ] **CHANGELOG updated:** Entry for new version with date
+- [ ] **Translations complete:** All keys in en.json and he.json
+- [ ] **Tests passing:** `/hass-test-integration`
+- [ ] **Pre-commit clean:** `pre-commit run --all-files`
+- [ ] **hassfest passing:** Check GitHub Actions
+- [ ] **HACS passing:** Check GitHub Actions
+- [ ] **Git clean:** No uncommitted changes
 
-## Related files
+## Quick Validation Command
+
+Run all validations in one go:
+
+```bash
+# Full validation suite
+pre-commit run --all-files && \
+python -c "import json; m=json.load(open('custom_components/silent_bus/manifest.json')); print(f'Version: {m[\"version\"]}')" && \
+pytest -v --tb=short
+```
+
+## Related Files
 
 - `custom_components/silent_bus/manifest.json` - Integration metadata
-- `custom_components/silent_bus/strings.json` - UI strings
-- `custom_components/silent_bus/translations/` - Multi-language support
+- `custom_components/silent_bus/strings.json` - UI strings source
+- `custom_components/silent_bus/translations/` - Language files
 - `hacs.json` - HACS configuration
 - `CHANGELOG.md` - Version history
-- `.github/workflows/hassfest.yaml` - hassfest validation workflow
+- `.github/workflows/hassfest.yaml` - HA validation workflow
 - `.github/workflows/hacs.yaml` - HACS validation workflow
 
-## Documentation links
+## Documentation Links
 
 - [Home Assistant Integration Manifest](https://developers.home-assistant.io/docs/creating_integration_manifest)
 - [HACS Requirements](https://hacs.xyz/docs/publish/start)

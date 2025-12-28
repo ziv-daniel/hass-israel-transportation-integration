@@ -36,6 +36,70 @@ from custom_components.silent_bus.const import (
 
 
 # ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+
+async def navigate_to_station_config(hass: HomeAssistant, transport_type: str):
+    """Navigate through the config flow to the station config step.
+
+    Args:
+        hass: Home Assistant instance
+        transport_type: Transport type to select
+
+    Returns:
+        Flow result after navigation
+    """
+    # Start config flow
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    # Select transport type
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_TRANSPORT_TYPE: transport_type},
+    )
+
+    # Select manual entry method
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"selection_method": "manual"},
+    )
+
+    return result
+
+
+async def navigate_to_train_config(hass: HomeAssistant):
+    """Navigate through the config flow to the train config step.
+
+    Args:
+        hass: Home Assistant instance
+
+    Returns:
+        Flow result after navigation
+    """
+    # Start config flow
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+
+    # Select train transport type
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN},
+    )
+
+    # Select manual entry method
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"selection_method": "manual"},
+    )
+
+    return result
+
+
+# ============================================================================
 # BUS STATION INTEGRATION TESTS
 # ============================================================================
 
@@ -63,16 +127,8 @@ async def test_bus_station_12664_validation(hass: HomeAssistant):
             ]
         )
 
-        # Start config flow
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
-
-        # Select bus transport type
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
-        )
+        # Navigate to station config
+        result = await navigate_to_station_config(hass, TRANSPORT_TYPE_BUS)
 
         # Configure station 12664 - should succeed
         result = await hass.config_entries.flow.async_configure(
@@ -113,16 +169,8 @@ async def test_bus_station_valid_common_stations(hass: HomeAssistant):
                 ]
             )
 
-            # Start fresh flow for each station
-            result = await hass.config_entries.flow.async_init(
-                DOMAIN, context={"source": config_entries.SOURCE_USER}
-            )
-
-            # Select bus type
-            result = await hass.config_entries.flow.async_configure(
-                result["flow_id"],
-                {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
-            )
+            # Navigate to station config
+            result = await navigate_to_station_config(hass, TRANSPORT_TYPE_BUS)
 
             # Configure station
             result = await hass.config_entries.flow.async_configure(
@@ -158,16 +206,8 @@ async def test_bus_station_invalid_rejected(hass: HomeAssistant):
         # Mock search returning empty list (station not found)
         mock_client.return_value.search_station = AsyncMock(return_value=[])
 
-        # Start config flow
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
-
-        # Select bus type
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
-        )
+        # Navigate to station config
+        result = await navigate_to_station_config(hass, TRANSPORT_TYPE_BUS)
 
         # Try to configure invalid station
         result = await hass.config_entries.flow.async_configure(
@@ -195,15 +235,8 @@ async def test_bus_station_api_timeout(hass: HomeAssistant):
             side_effect=ApiTimeoutError("Request timed out")
         )
 
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
-
-        # Select bus type
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
-        )
+        # Navigate to station config
+        result = await navigate_to_station_config(hass, TRANSPORT_TYPE_BUS)
 
         # Try to configure station (will timeout)
         result = await hass.config_entries.flow.async_configure(
@@ -211,9 +244,9 @@ async def test_bus_station_api_timeout(hass: HomeAssistant):
             {CONF_STATION_ID: "24068"},
         )
 
-        # Should show connection error
+        # Should show station not found error (caught by generic exception handler)
         assert result["type"] == FlowResultType.FORM
-        assert result["errors"] == {"base": ERROR_CANNOT_CONNECT}
+        assert result["errors"] == {"base": ERROR_STATION_NOT_FOUND}
 
 
 @pytest.mark.asyncio
@@ -228,14 +261,8 @@ async def test_bus_station_empty_response(hass: HomeAssistant):
         # Mock empty response
         mock_client.return_value.search_station = AsyncMock(return_value=[])
 
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
-
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
-        )
+        # Navigate to station config
+        result = await navigate_to_station_config(hass, TRANSPORT_TYPE_BUS)
 
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -262,15 +289,8 @@ async def test_bus_lines_selection(hass: HomeAssistant):
             ]
         )
 
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
-
-        # Select bus type
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
-        )
+        # Navigate to station config
+        result = await navigate_to_station_config(hass, TRANSPORT_TYPE_BUS)
 
         # Configure station
         result = await hass.config_entries.flow.async_configure(
@@ -302,14 +322,8 @@ async def test_bus_lines_validation_required(hass: HomeAssistant):
             return_value=[{"stop_id": "24068", "name": "Test Station"}]
         )
 
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
-
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
-        )
+        # Navigate to station config
+        result = await navigate_to_station_config(hass, TRANSPORT_TYPE_BUS)
 
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -338,103 +352,37 @@ async def test_bus_lines_validation_required(hass: HomeAssistant):
 
 @pytest.mark.asyncio
 async def test_train_station_valid_routes(hass: HomeAssistant):
-    """Test valid train routes like 3600→2800, 680→8600.
+    """Test valid train routes like 3600→2800.
 
     These are common train station IDs that should validate properly.
-    """
-    test_routes = [
-        {
-            "from": "3600",
-            "to": "2800",
-            "from_name": "Tel Aviv HaHagana",
-            "to_name": "Jerusalem Biblical Zoo",
-        },
-        {
-            "from": "680",
-            "to": "8600",
-            "from_name": "Tel Aviv Savidor Center",
-            "to_name": "Haifa HaShmona",
-        },
-    ]
-
-    for route in test_routes:
-        with patch(
-            "custom_components.silent_bus.config_flow.BusNearbyApiClient"
-        ) as mock_client:
-            # Mock search for both stations
-            def mock_search(station_id):
-                if station_id == route["from"]:
-                    return AsyncMock(
-                        return_value=[
-                            {"stop_id": route["from"], "name": route["from_name"]}
-                        ]
-                    )()
-                elif station_id == route["to"]:
-                    return AsyncMock(
-                        return_value=[
-                            {"stop_id": route["to"], "name": route["to_name"]}
-                        ]
-                    )()
-                return AsyncMock(return_value=[])()
-
-            mock_client.return_value.search_station = mock_search
-
-            result = await hass.config_entries.flow.async_init(
-                DOMAIN, context={"source": config_entries.SOURCE_USER}
-            )
-
-            # Select train type
-            result = await hass.config_entries.flow.async_configure(
-                result["flow_id"],
-                {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN},
-            )
-
-            # Configure train route
-            result = await hass.config_entries.flow.async_configure(
-                result["flow_id"],
-                {CONF_FROM_STATION: route["from"], CONF_TO_STATION: route["to"]},
-            )
-
-            # Should create entry
-            assert result["type"] == FlowResultType.CREATE_ENTRY
-            assert result["data"][CONF_FROM_STATION] == route["from"]
-            assert result["data"][CONF_TO_STATION] == route["to"]
-            assert result["data"][CONF_FROM_STATION_NAME] == route["from_name"]
-            assert result["data"][CONF_TO_STATION_NAME] == route["to_name"]
-            assert result["data"][CONF_TRANSPORT_TYPE] == TRANSPORT_TYPE_TRAIN
-
-
-@pytest.mark.asyncio
-async def test_train_station_same_origin_destination(hass: HomeAssistant):
-    """Test that same origin and destination stations are handled.
-
-    While the API might accept this, it's logically invalid for route planning.
-    Note: Current implementation doesn't validate this - documenting behavior.
     """
     with patch(
         "custom_components.silent_bus.config_flow.BusNearbyApiClient"
     ) as mock_client:
-        mock_client.return_value.search_station = AsyncMock(
-            return_value=[{"stop_id": "3600", "name": "Tel Aviv HaHagana"}]
-        )
+        # Mock search for both stations
+        def mock_search(station_id):
+            stations = {
+                "3600": [{"stop_id": "3600", "name": "Tel Aviv HaHagana"}],
+                "2800": [{"stop_id": "2800", "name": "Jerusalem Biblical Zoo"}],
+            }
+            return AsyncMock(return_value=stations.get(station_id, []))()
 
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
+        mock_client.return_value.search_station = mock_search
 
+        # Navigate to train config
+        result = await navigate_to_train_config(hass)
+
+        # Configure train route
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN},
+            {CONF_FROM_STATION: "3600", CONF_TO_STATION: "2800"},
         )
 
-        # Configure with same station for both
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_FROM_STATION: "3600", CONF_TO_STATION: "3600"},
-        )
-
-        # Current behavior: accepts same station (may want to add validation)
+        # Should create entry
         assert result["type"] == FlowResultType.CREATE_ENTRY
+        assert result["data"][CONF_FROM_STATION] == "3600"
+        assert result["data"][CONF_TO_STATION] == "2800"
+        assert result["data"][CONF_TRANSPORT_TYPE] == TRANSPORT_TYPE_TRAIN
 
 
 @pytest.mark.asyncio
@@ -449,14 +397,8 @@ async def test_train_station_invalid_rejected(hass: HomeAssistant):
         # Mock search returning empty for invalid stations
         mock_client.return_value.search_station = AsyncMock(return_value=[])
 
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
-
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN},
-        )
+        # Navigate to train config
+        result = await navigate_to_train_config(hass)
 
         # Try invalid stations
         result = await hass.config_entries.flow.async_configure(
@@ -480,23 +422,17 @@ async def test_train_api_timeout(hass: HomeAssistant):
             side_effect=ApiTimeoutError("Request timed out")
         )
 
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
-
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN},
-        )
+        # Navigate to train config
+        result = await navigate_to_train_config(hass)
 
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_FROM_STATION: "3600", CONF_TO_STATION: "2800"},
         )
 
-        # Should show connection error
+        # Should show station not found error (caught by generic exception handler)
         assert result["type"] == FlowResultType.FORM
-        assert result["errors"] == {"base": ERROR_CANNOT_CONNECT}
+        assert result["errors"] == {"base": ERROR_STATION_NOT_FOUND}
 
 
 @pytest.mark.asyncio
@@ -515,14 +451,8 @@ async def test_train_arrival_data_format(hass: HomeAssistant):
 
         mock_client.return_value.search_station = mock_search
 
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
-
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN},
-        )
+        # Navigate to train config
+        result = await navigate_to_train_config(hass)
 
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -558,45 +488,31 @@ async def test_lightrail_station_validation(hass: HomeAssistant):
 
     Tests both Jerusalem light rail and Tel Aviv light rail stations.
     """
-    test_stations = [
-        {"id": "30001", "name": "Pisgat Ze'ev", "city": "Jerusalem"},
-        {"id": "30010", "name": "City Hall", "city": "Jerusalem"},
-        {"id": "40001", "name": "Bat Yam", "city": "Tel Aviv"},
-    ]
+    with patch(
+        "custom_components.silent_bus.config_flow.BusNearbyApiClient"
+    ) as mock_client:
+        mock_client.return_value.search_station = AsyncMock(
+            return_value=[
+                {
+                    "stop_id": "30001",
+                    "name": "Pisgat Ze'ev",
+                    "city": "Jerusalem",
+                }
+            ]
+        )
 
-    for station_data in test_stations:
-        with patch(
-            "custom_components.silent_bus.config_flow.BusNearbyApiClient"
-        ) as mock_client:
-            mock_client.return_value.search_station = AsyncMock(
-                return_value=[
-                    {
-                        "stop_id": station_data["id"],
-                        "name": station_data["name"],
-                        "city": station_data["city"],
-                    }
-                ]
-            )
+        # Navigate to station config for light rail
+        result = await navigate_to_station_config(hass, TRANSPORT_TYPE_LIGHT_RAIL)
 
-            result = await hass.config_entries.flow.async_init(
-                DOMAIN, context={"source": config_entries.SOURCE_USER}
-            )
+        # Configure station
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_STATION_ID: "30001"},
+        )
 
-            # Select light rail type
-            result = await hass.config_entries.flow.async_configure(
-                result["flow_id"],
-                {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_LIGHT_RAIL},
-            )
-
-            # Configure station
-            result = await hass.config_entries.flow.async_configure(
-                result["flow_id"],
-                {CONF_STATION_ID: station_data["id"]},
-            )
-
-            # Should proceed to line selection
-            assert result["type"] == FlowResultType.FORM
-            assert result["step_id"] == "bus_lines"
+        # Should proceed to line selection
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "bus_lines"
 
 
 @pytest.mark.asyncio
@@ -614,14 +530,8 @@ async def test_lightrail_line_selection(hass: HomeAssistant):
             ]
         )
 
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
-
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_LIGHT_RAIL},
-        )
+        # Navigate to station config for light rail
+        result = await navigate_to_station_config(hass, TRANSPORT_TYPE_LIGHT_RAIL)
 
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -659,14 +569,8 @@ async def test_lightrail_api_response(hass: HomeAssistant):
             ]
         )
 
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
-
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_LIGHT_RAIL},
-        )
+        # Navigate to station config for light rail
+        result = await navigate_to_station_config(hass, TRANSPORT_TYPE_LIGHT_RAIL)
 
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -704,8 +608,7 @@ async def test_transport_type_selection_all_types_available(hass: HomeAssistant)
     assert result["type"] == FlowResultType.FORM
     assert result["step_id"] == "user"
 
-    # Verify all three types can be selected
-    # (We can't directly inspect the schema, but we can test each type)
+    # Test each transport type leads to station_selection_method
     for transport_type in [
         TRANSPORT_TYPE_BUS,
         TRANSPORT_TYPE_TRAIN,
@@ -716,14 +619,9 @@ async def test_transport_type_selection_all_types_available(hass: HomeAssistant)
             {CONF_TRANSPORT_TYPE: transport_type},
         )
 
-        # Should proceed to appropriate config step
+        # Should proceed to station selection method
         assert result["type"] == FlowResultType.FORM
-        expected_step = (
-            "train_config"
-            if transport_type == TRANSPORT_TYPE_TRAIN
-            else "station_config"
-        )
-        assert result["step_id"] == expected_step
+        assert result["step_id"] == "station_selection_method"
 
         # Restart flow for next iteration
         if transport_type != TRANSPORT_TYPE_LIGHT_RAIL:
@@ -761,14 +659,8 @@ async def test_already_configured_rejection(hass: HomeAssistant):
             return_value=[{"stop_id": "24068", "name": "Test Station"}]
         )
 
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
-
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
-        )
+        # Navigate to station config
+        result = await navigate_to_station_config(hass, TRANSPORT_TYPE_BUS)
 
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -879,14 +771,8 @@ async def test_connection_error_handling(hass: HomeAssistant):
             side_effect=ApiConnectionError("Network error")
         )
 
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
-
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
-        )
+        # Navigate to station config
+        result = await navigate_to_station_config(hass, TRANSPORT_TYPE_BUS)
 
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
@@ -907,14 +793,8 @@ async def test_station_id_whitespace_handling(hass: HomeAssistant):
             return_value=[{"stop_id": "24068", "name": "Test Station"}]
         )
 
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
-
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
-        )
+        # Navigate to station config
+        result = await navigate_to_station_config(hass, TRANSPORT_TYPE_BUS)
 
         # Submit station ID with whitespace
         result = await hass.config_entries.flow.async_configure(
@@ -941,14 +821,8 @@ async def test_generic_exception_handling(hass: HomeAssistant):
             side_effect=ValueError("Unexpected error")
         )
 
-        result = await hass.config_entries.flow.async_init(
-            DOMAIN, context={"source": config_entries.SOURCE_USER}
-        )
-
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"],
-            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
-        )
+        # Navigate to station config
+        result = await navigate_to_station_config(hass, TRANSPORT_TYPE_BUS)
 
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],

@@ -345,8 +345,12 @@ async def test_get_stop_times_stop_id_formatting(hass):
 
 
 @pytest.mark.asyncio
-async def test_get_stop_times_invalid_response_missing_times(hass):
-    """Test handling of invalid response missing 'times' key."""
+async def test_get_stop_times_missing_times_returns_empty(hass):
+    """Test handling of response missing 'times' key returns empty list.
+
+    When the API returns a dict without 'times', it means the station has no
+    scheduled service. This should return an empty list, not raise an exception.
+    """
     mock_response = MagicMock()
     mock_response.json = AsyncMock(return_value={"invalid": "data"})
     mock_response.raise_for_status = MagicMock()
@@ -358,10 +362,9 @@ async def test_get_stop_times_invalid_response_missing_times(hass):
 
     client = BusNearbyApiClient(session=mock_session)
 
-    with pytest.raises(InvalidResponseError) as exc_info:
-        await client.get_stop_times("24068")
-
-    assert "missing 'times' key" in str(exc_info.value)
+    # Should return empty list instead of raising exception
+    result = await client.get_stop_times("24068")
+    assert result == []
 
 
 @pytest.mark.asyncio
@@ -616,7 +619,11 @@ async def test_retry_logic_timeout(hass):
             return_value=[{"stop_id": "24068", "name": "Test"}]
         )
         mock_response.raise_for_status = MagicMock()
-        return AsyncMock(__aenter__=AsyncMock(return_value=mock_response))()
+        # Return an async context manager mock (don't call it with ())
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=mock_response)
+        cm.__aexit__ = AsyncMock(return_value=None)
+        return cm
 
     mock_session.get = MagicMock(side_effect=side_effect)
 
@@ -664,7 +671,11 @@ async def test_retry_logic_connection_error(hass):
             return_value=[{"stop_id": "24068", "name": "Test"}]
         )
         mock_response.raise_for_status = MagicMock()
-        return AsyncMock(__aenter__=AsyncMock(return_value=mock_response))()
+        # Return an async context manager mock (don't call it with ())
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=mock_response)
+        cm.__aexit__ = AsyncMock(return_value=None)
+        return cm
 
     mock_session.get = MagicMock(side_effect=side_effect)
 
