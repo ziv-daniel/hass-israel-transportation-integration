@@ -1,12 +1,16 @@
 {
   "domain": "silent_bus",
   "name": "Israel Transportation",
-  "codeowners": ["@ziv-daniel"],
+  "codeowners": [
+    "@ziv-daniel"
+  ],
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/ziv-daniel/hass-israel-transportation-integration",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/ziv-daniel/hass-israel-transportation-integration/issues",
-  "requirements": ["aiohttp>=3.9.0"],
-  "version": "1.3.1"
+  "requirements": [
+    "aiohttp>=3.9.0"
+  ],
+  "version": "1.3.2"
 }
