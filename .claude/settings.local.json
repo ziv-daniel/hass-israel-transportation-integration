@@ -63,7 +63,19 @@
       "Bash(ls:*)",
       "Bash(git restore:*)",
       "Bash(git checkout:*)",
-      "Bash(copy \"scripts\\\\train_stations.py\" \"custom_components\\\\silent_bus\\\\train_stations.py\")"
+      "Bash(copy:*)",
+      "Bash(git pull:*)",
+      "Bash(rsync:*)",
+      "WebFetch(domain:www.rail.co.il)",
+      "Bash(pip show:*)",
+      "Bash(timeout /t 30 /nobreak)",
+      "Bash(timeout /t 45 /nobreak)",
+      "Bash(pip install:*)",
+      "Bash(ruff check:*)",
+      "Bash(ruff format:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(C:Python39Scriptsruff.exe check --fix .)",
+      "Bash(C:Python39Scriptsruff.exe format .)"
     ]
   }
 }

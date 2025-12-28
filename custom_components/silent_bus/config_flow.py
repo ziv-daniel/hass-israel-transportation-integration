@@ -383,9 +383,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Get station names from train stations list
             stations_list = get_train_stations_list()
-            station = next(
-                (s for s in stations_list if s["id"] == station_id), None
-            )
+            station = next((s for s in stations_list if s["id"] == station_id), None)
 
             if station:
                 self._from_station = station_id
@@ -440,9 +438,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Get station names from train stations list
             stations_list = get_train_stations_list()
-            station = next(
-                (s for s in stations_list if s["id"] == station_id), None
-            )
+            station = next((s for s in stations_list if s["id"] == station_id), None)
 
             if station:
                 self._to_station = station_id
