@@ -66,3 +66,52 @@ class TestGetStation:
 
             assert result["Name"] is None
             assert result["Makat"] == 0
+
+
+class TestValidateStation:
+    """Test validate_station method."""
+
+    @pytest.mark.asyncio
+    async def test_validate_station_valid(self):
+        """Test validating a valid station returns True."""
+        mock_response = {
+            "Name": "אלי מויאל/דוד המלך",
+            "Makat": 12665,
+        }
+
+        with patch.object(GovApiClient, "get_station", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_response
+            async with GovApiClient() as client:
+                result = await client.validate_station("12665")
+
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_validate_station_invalid_null_name(self):
+        """Test validating station with null name returns False."""
+        mock_response = {
+            "Name": None,
+            "Makat": 0,
+        }
+
+        with patch.object(GovApiClient, "get_station", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_response
+            async with GovApiClient() as client:
+                result = await client.validate_station("99999")
+
+            assert result is False
+
+    @pytest.mark.asyncio
+    async def test_validate_station_invalid_zero_makat(self):
+        """Test validating station with zero makat returns False."""
+        mock_response = {
+            "Name": "Some Name",
+            "Makat": 0,
+        }
+
+        with patch.object(GovApiClient, "get_station", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = mock_response
+            async with GovApiClient() as client:
+                result = await client.validate_station("99999")
+
+            assert result is False

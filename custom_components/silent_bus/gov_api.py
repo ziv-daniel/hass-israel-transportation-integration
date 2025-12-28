@@ -92,3 +92,18 @@ class GovApiClient:
             return {"Name": None, "Makat": 0}
 
         return result
+
+    async def validate_station(self, makat: str) -> bool:
+        """Validate that a station exists.
+
+        Args:
+            makat: Station Makat to validate
+
+        Returns:
+            True if station exists and is valid, False otherwise
+        """
+        try:
+            result = await self.get_station(makat)
+            return result.get("Name") is not None and result.get("Makat", 0) > 0
+        except GovApiError:
+            return False
