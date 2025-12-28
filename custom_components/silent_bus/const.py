@@ -72,6 +72,7 @@ ATTR_LAST_UPDATE: Final = "last_update"
 ATTR_ATTRIBUTION: Final = "attribution"
 
 # Attribution
+ATTRIBUTION: Final = "Data provided by Israel Ministry of Transportation"
 ATTRIBUTION_BUSNEARBY: Final = "Data provided by BusNearby"
 ATTRIBUTION_GOV: Final = "Data provided by Israel Ministry of Transportation"
 

@@ -13,10 +13,12 @@ from custom_components.silent_bus.const import (
     CONF_MAX_ARRIVALS,
     CONF_STATION_ID,
     CONF_STATION_NAME,
+    CONF_TRANSPORT_TYPE,
     CONF_UPDATE_INTERVAL,
     DEFAULT_MAX_ARRIVALS,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    TRANSPORT_TYPE_BUS,
 )
 
 pytest_plugins = "pytest_homeassistant_custom_component"
@@ -30,7 +32,7 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 
 @pytest.fixture
 def mock_api_client():
-    """Mock BusNearbyApiClient."""
+    """Mock BusNearbyApiClient for train tests."""
     with patch("custom_components.silent_bus.api.BusNearbyApiClient") as mock:
         client = mock.return_value
         client.validate_station = AsyncMock(return_value=True)
@@ -70,11 +72,52 @@ def mock_api_client():
 
 
 @pytest.fixture
+def mock_gov_api_client():
+    """Mock GovApiClient for bus/light rail tests."""
+    with patch("custom_components.silent_bus.gov_api.GovApiClient") as mock:
+        client = mock.return_value
+        client.validate_station = AsyncMock(return_value=True)
+        client.get_station = AsyncMock(
+            return_value={
+                "Name": "Arlozorov Terminal",
+                "Makat": 24068,
+                "Latitude": 32.0853,
+                "Longitude": 34.7818,
+            }
+        )
+        client.get_arrivals = AsyncMock(
+            return_value=[
+                {
+                    "Shilut": "249",
+                    "MinutesToArrival": 5,
+                    "MinutesToArrivalList": [5, 15],
+                    "Description": "Tel Aviv - Jerusalem",
+                    "CompanyName": "Egged",
+                    "BusstopHebrewName": "Arlozorov Terminal",
+                    "ResponseSuccesed": True,
+                },
+                {
+                    "Shilut": "40",
+                    "MinutesToArrival": 8,
+                    "MinutesToArrivalList": [8, 20],
+                    "Description": "Tel Aviv - Ramat Gan",
+                    "CompanyName": "Dan",
+                    "BusstopHebrewName": "Arlozorov Terminal",
+                    "ResponseSuccesed": True,
+                },
+            ]
+        )
+        client.close = AsyncMock()
+        yield client
+
+
+@pytest.fixture
 def mock_config_entry():
-    """Mock config entry."""
+    """Mock config entry for bus transport."""
     return MockConfigEntry(
         domain=DOMAIN,
         data={
+            CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS,
             CONF_STATION_ID: "24068",
             CONF_STATION_NAME: "Arlozorov Terminal",
             CONF_BUS_LINES: ["249", "40", "605"],
@@ -101,13 +144,13 @@ def simple_mock_config_entry(hass):
 
 
 @pytest.fixture
-async def setup_integration(hass: HomeAssistant, mock_config_entry, mock_api_client):
-    """Set up the Silent Bus integration."""
+async def setup_integration(hass: HomeAssistant, mock_config_entry, mock_gov_api_client):
+    """Set up the Silent Bus integration for bus/light rail."""
     mock_config_entry.add_to_hass(hass)
 
     with patch(
-        "custom_components.silent_bus.BusNearbyApiClient",
-        return_value=mock_api_client,
+        "custom_components.silent_bus.GovApiClient",
+        return_value=mock_gov_api_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()

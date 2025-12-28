@@ -33,6 +33,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
     def __init__(
         self,
         hass: HomeAssistant,
+        *,
         api_client: BusNearbyApiClient | None = None,  # Keep for trains
         gov_api_client: GovApiClient | None = None,    # New for bus/light_rail
         update_interval: timedelta,

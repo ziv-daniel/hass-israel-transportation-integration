@@ -13,19 +13,21 @@ from custom_components.silent_bus.const import (
     CONF_BUS_LINES,
     CONF_STATION_ID,
     DOMAIN,
+    CONF_TRANSPORT_TYPE,
+    TRANSPORT_TYPE_BUS,
 )
 
 
 @pytest.mark.asyncio
 async def test_setup_and_unload(
-    hass: HomeAssistant, mock_config_entry, mock_api_client
+    hass: HomeAssistant, mock_config_entry, mock_gov_api_client
 ):
     """Test integration setup and unload."""
     mock_config_entry.add_to_hass(hass)
 
     with patch(
-        "custom_components.silent_bus.BusNearbyApiClient",
-        return_value=mock_api_client,
+        "custom_components.silent_bus.GovApiClient",
+        return_value=mock_gov_api_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
@@ -49,14 +51,14 @@ async def test_setup_and_unload(
 @pytest.mark.asyncio
 async def test_setup_failure_invalid_station(hass: HomeAssistant, mock_config_entry):
     """Test setup failure with invalid station."""
-    mock_api_client = MagicMock()
-    mock_api_client.validate_station = AsyncMock(return_value=False)
+    mock_gov_api_client = MagicMock()
+    mock_gov_api_client.validate_station = AsyncMock(return_value=False)
 
     mock_config_entry.add_to_hass(hass)
 
     with patch(
-        "custom_components.silent_bus.BusNearbyApiClient",
-        return_value=mock_api_client,
+        "custom_components.silent_bus.GovApiClient",
+        return_value=mock_gov_api_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
@@ -65,13 +67,13 @@ async def test_setup_failure_invalid_station(hass: HomeAssistant, mock_config_en
 
 
 @pytest.mark.asyncio
-async def test_reload_entry(hass: HomeAssistant, mock_config_entry, mock_api_client):
+async def test_reload_entry(hass: HomeAssistant, mock_config_entry, mock_gov_api_client):
     """Test reloading the config entry."""
     mock_config_entry.add_to_hass(hass)
 
     with patch(
-        "custom_components.silent_bus.BusNearbyApiClient",
-        return_value=mock_api_client,
+        "custom_components.silent_bus.GovApiClient",
+        return_value=mock_gov_api_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
@@ -86,13 +88,13 @@ async def test_reload_entry(hass: HomeAssistant, mock_config_entry, mock_api_cli
 
 
 @pytest.mark.asyncio
-async def test_sensors_created(hass: HomeAssistant, mock_config_entry, mock_api_client):
+async def test_sensors_created(hass: HomeAssistant, mock_config_entry, mock_gov_api_client):
     """Test that sensors are created for each bus line."""
     mock_config_entry.add_to_hass(hass)
 
     with patch(
-        "custom_components.silent_bus.BusNearbyApiClient",
-        return_value=mock_api_client,
+        "custom_components.silent_bus.GovApiClient",
+        return_value=mock_gov_api_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()

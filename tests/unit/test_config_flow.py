@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.silent_bus.api import ApiConnectionError
+from custom_components.silent_bus.gov_api import ApiConnectionError as GovApiConnectionError
 from custom_components.silent_bus.const import (
     CONF_BUS_LINES,
     CONF_STATION_ID,
@@ -41,9 +42,14 @@ async def test_user_form_station_not_found(hass: HomeAssistant):
     )
 
     with patch(
-        "custom_components.silent_bus.config_flow.BusNearbyApiClient"
+        "custom_components.silent_bus.config_flow.GovApiClient"
     ) as mock_client:
-        mock_client.return_value.search_station = AsyncMock(return_value=[])
+        # Mock station not found (Name is None, Makat is 0)
+        mock_client.return_value.get_station = AsyncMock(
+            return_value={"Name": None, "Makat": 0}
+        )
+        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -73,18 +79,21 @@ async def test_user_form_station_not_found(hass: HomeAssistant):
 
 @pytest.mark.asyncio
 async def test_user_form_cannot_connect(hass: HomeAssistant):
-    """Test connection error is caught and shown as station not found."""
+    """Test connection error is caught and shown as cannot_connect error."""
     from custom_components.silent_bus.const import (
         CONF_TRANSPORT_TYPE,
         TRANSPORT_TYPE_BUS,
+        ERROR_CANNOT_CONNECT,
     )
 
     with patch(
-        "custom_components.silent_bus.config_flow.BusNearbyApiClient"
+        "custom_components.silent_bus.config_flow.GovApiClient"
     ) as mock_client:
-        # ApiConnectionError is caught by generic exception handler in config flow
-        mock_client.return_value.search_station = AsyncMock(
-            side_effect=ApiConnectionError("Test error")
+        # GovApiConnectionError is caught and shown as cannot_connect
+        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
+        mock_client.return_value.get_station = AsyncMock(
+            side_effect=GovApiConnectionError("Test error")
         )
 
         result = await hass.config_entries.flow.async_init(
@@ -103,15 +112,15 @@ async def test_user_form_cannot_connect(hass: HomeAssistant):
             {"selection_method": "manual"},
         )
 
-        # Then configure station (connection error caught as station not found)
+        # Then configure station (connection error caught)
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_STATION_ID: "24068"},
         )
 
         assert result["type"] == FlowResultType.FORM
-        # Note: ApiConnectionError is caught by generic handler, shown as station_not_found
-        assert result["errors"] == {"base": ERROR_STATION_NOT_FOUND}
+        # GovApiConnectionError is caught and shown as cannot_connect
+        assert result["errors"] == {"base": ERROR_CANNOT_CONNECT}
 
 
 @pytest.mark.asyncio
@@ -123,11 +132,14 @@ async def test_user_form_success(hass: HomeAssistant):
     )
 
     with patch(
-        "custom_components.silent_bus.config_flow.BusNearbyApiClient"
+        "custom_components.silent_bus.config_flow.GovApiClient"
     ) as mock_client:
-        mock_client.return_value.search_station = AsyncMock(
-            return_value=[{"name": "Test Station", "stop_id": "24068"}]
+        # Mock valid station (Name is set, Makat is non-zero)
+        mock_client.return_value.get_station = AsyncMock(
+            return_value={"Name": "Test Station", "Makat": 24068}
         )
+        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -164,11 +176,13 @@ async def test_bus_lines_form_no_lines(hass: HomeAssistant):
     )
 
     with patch(
-        "custom_components.silent_bus.config_flow.BusNearbyApiClient"
+        "custom_components.silent_bus.config_flow.GovApiClient"
     ) as mock_client:
-        mock_client.return_value.search_station = AsyncMock(
-            return_value=[{"name": "Test Station", "stop_id": "24068"}]
+        mock_client.return_value.get_station = AsyncMock(
+            return_value={"Name": "Test Station", "Makat": 24068}
         )
+        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -211,11 +225,13 @@ async def test_full_flow_success(hass: HomeAssistant):
     )
 
     with patch(
-        "custom_components.silent_bus.config_flow.BusNearbyApiClient"
+        "custom_components.silent_bus.config_flow.GovApiClient"
     ) as mock_client:
-        mock_client.return_value.search_station = AsyncMock(
-            return_value=[{"name": "Test Station", "stop_id": "24068"}]
+        mock_client.return_value.get_station = AsyncMock(
+            return_value={"Name": "Test Station", "Makat": 24068}
         )
+        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -306,36 +322,31 @@ async def test_options_flow_update(hass: HomeAssistant):
 
 
 @pytest.mark.asyncio
-async def test_stop_code_to_stop_id_translation(hass: HomeAssistant):
-    """Test that stop_code entered by user is translated to stop_id from API.
+async def test_station_makat_used_directly(hass: HomeAssistant):
+    """Test that user-entered makat is used directly with gov API.
 
-    This is a critical test case: Users enter the stop_code displayed on bus stop signs
-    (e.g., 12665), but the stoptimes API requires the internal stop_id (e.g., 44592).
-    The search API returns both, and the integration must use the stop_id for API calls.
+    With the gov API, users enter the makat (stop code displayed on bus stop signs)
+    and the gov API accepts this directly without translation.
     """
     from custom_components.silent_bus.const import (
         CONF_TRANSPORT_TYPE,
         TRANSPORT_TYPE_BUS,
     )
 
-    # User enters stop_code "12665", but API returns stop_id "44592"
-    search_result = [
-        {
-            "stop_id": "44592",  # This is what API calls need
-            "stop_code": "12665",  # This is what user enters
-            "stop_name": "אלי מויאל/דוד המלך",
-            "latitude": 31.54078,
-            "longitude": 34.596389,
-        }
-    ]
-
     with patch(
-        "custom_components.silent_bus.config_flow.BusNearbyApiClient"
+        "custom_components.silent_bus.config_flow.GovApiClient"
     ) as mock_client:
-        mock_client.return_value.search_station = AsyncMock(return_value=search_result)
-        mock_client.return_value.validate_station_api_response = AsyncMock(
-            return_value=(True, "")
+        # Gov API returns station info directly using makat
+        mock_client.return_value.get_station = AsyncMock(
+            return_value={
+                "Name": "אלי מויאל/דוד המלך",
+                "Makat": 12665,
+                "Latitude": 31.54078,
+                "Longitude": 34.596389,
+            }
         )
+        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -353,7 +364,7 @@ async def test_stop_code_to_stop_id_translation(hass: HomeAssistant):
             {"selection_method": "manual"},
         )
 
-        # Enter stop_code "12665" (what user sees on bus stop sign)
+        # Enter makat "12665" (what user sees on bus stop sign)
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_STATION_ID: "12665"},
@@ -366,6 +377,6 @@ async def test_stop_code_to_stop_id_translation(hass: HomeAssistant):
         )
 
         assert result["type"] == FlowResultType.CREATE_ENTRY
-        # CRITICAL: The saved stop_id should be "44592" (from API), NOT "12665" (user input)
-        assert result["data"][CONF_STATION_ID] == "44592"
+        # With gov API, the makat is stored directly as entered
+        assert result["data"][CONF_STATION_ID] == "12665"
         assert result["data"][CONF_BUS_LINES] == ["1", "5", "1א"]
