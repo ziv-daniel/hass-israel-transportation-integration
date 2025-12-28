@@ -51,13 +51,10 @@ TRAIN_STATIONS = {
     "2940": ("בית יהושע", "Beit Yehoshua"),
     "3310": ("נתיבות קיסריה", "Caesarea Pardes Hanna"),
     "2760": ("בניימינה", "Binyamina"),
-    # "2820": ("עתלית", "Atlit"),  # TODO: Find correct station ID (conflicts with Petah Tikva Segula)
 
     # Haifa
     "2200": ("חדרה - מערב", "Hadera - West"),
     "2300": ("חיפה - בת גלים", "Haifa - Bat Galim"),
-    # "2500": ("חיפה - מרכז השמונה", "Haifa - Merkaz HaShmona"),  # TODO: Find correct ID (conflicts with Netanya)
-    # "2800": ("חיפה - חוף הכרמל", "Haifa - Hof HaCarmel"),  # TODO: Find correct ID (conflicts with Petah Tikva)
     "700": ("קריית מוצקין", "Kiryat Motzkin"),
     "1500": ("קריית חיים", "Kiryat Haim"),
     "1820": ("לב המפרץ", "Lev HaMifratz"),
@@ -65,17 +62,13 @@ TRAIN_STATIONS = {
     "4690": ("נהריה", "Nahariya"),
 
     # North
-    # "1240": ("כרמיאל", "Carmiel"),  # TODO: Find correct ID (conflicts with Ra'anana West)
     "5800": ("קריית שמונה", "Kiryat Shmona"),
-    # "5900": ("אפרים", "Afri"),  # TODO: Find correct ID (conflicts with Be'er Ya'akov)
     "4680": ("אחיהוד", "Ahihud"),
 
     # South
     "5900": ("באר יעקב", "Be'er Ya'akov"),
-    # "5010": ("יבנה - מזרח", "Yavne - East"),  # TODO: Find correct ID (conflicts with Modi'in Center)
     "5200": ("יבנה - מערב", "Yavne - West"),
     "4100": ("אשדוד - עד הלום", "Ashdod - Ad Halom"),
-    # "4900": ("אשקלון", "Ashkelon"),  # TODO: Find correct ID (conflicts with Tel Aviv HaHagana)
     "7300": ("שדרות", "Sderot"),
     "7320": ("נתיבות", "Netivot"),
     "7500": ("באר שבע - מרכז", "Be'er Sheva - Center"),
