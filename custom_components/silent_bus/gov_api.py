@@ -107,3 +107,41 @@ class GovApiClient:
             return result.get("Name") is not None and result.get("Makat", 0) > 0
         except GovApiError:
             return False
+
+    async def get_arrivals(
+        self,
+        makat: str,
+        locale: str = "he",
+        lines: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Get real-time bus arrivals for a station.
+
+        Args:
+            makat: Station Makat
+            locale: Language locale (default: "he")
+            lines: Optional list of line numbers to filter by
+
+        Returns:
+            List of arrival dictionaries containing:
+                - Shilut: Line number/name
+                - MinutesToArrival: Minutes until next arrival
+                - MinutesToArrivalList: List of all upcoming arrival times in minutes
+                - Description: Route description
+                - CompanyName: Bus company name
+                - BusstopHebrewName: Station name in Hebrew
+        """
+        url = f"{GOV_API_BASE_URL}/GetRealtimeBusLineListByBustop/{makat}/{locale}/false"
+        _LOGGER.debug("Getting arrivals for Makat %s, lines filter: %s", makat, lines)
+
+        result = await self._make_request(url)
+
+        if not isinstance(result, list):
+            _LOGGER.warning("Unexpected response type for arrivals: %s", type(result))
+            return []
+
+        # Filter by lines if specified
+        if lines:
+            result = [arr for arr in result if arr.get("Shilut") in lines]
+            _LOGGER.debug("Filtered to %d arrivals for lines %s", len(result), lines)
+
+        return result

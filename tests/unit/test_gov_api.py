@@ -115,3 +115,69 @@ class TestValidateStation:
                 result = await client.validate_station("99999")
 
             assert result is False
+
+
+class TestGetArrivals:
+    """Test get_arrivals method."""
+
+    @pytest.mark.asyncio
+    async def test_get_arrivals_with_data(self):
+        """Test getting arrivals for station with buses."""
+        mock_response = [
+            {
+                "Shilut": "1א",
+                "MinutesToArrival": 4,
+                "MinutesToArrivalList": [4, 34],
+                "Description": "שדרות,נאות הנביאים - אזור התעשיה",
+                "CompanyName": "דן בדרום",
+                "BusstopHebrewName": "אלי מויאל/דוד המלך",
+                "ResponseSuccesed": True,
+            },
+            {
+                "Shilut": "5",
+                "MinutesToArrival": 8,
+                "MinutesToArrivalList": [8, 25],
+                "Description": "שדרות - תחנת רכבת",
+                "CompanyName": "דן בדרום",
+                "BusstopHebrewName": "אלי מויאל/דוד המלך",
+                "ResponseSuccesed": True,
+            },
+        ]
+
+        with patch.object(GovApiClient, "_make_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+            async with GovApiClient() as client:
+                result = await client.get_arrivals("12665")
+
+            assert len(result) == 2
+            assert result[0]["Shilut"] == "1א"
+            assert result[0]["MinutesToArrival"] == 4
+            assert result[1]["Shilut"] == "5"
+
+    @pytest.mark.asyncio
+    async def test_get_arrivals_empty(self):
+        """Test getting arrivals for station with no buses."""
+        with patch.object(GovApiClient, "_make_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = []
+            async with GovApiClient() as client:
+                result = await client.get_arrivals("12665")
+
+            assert result == []
+
+    @pytest.mark.asyncio
+    async def test_get_arrivals_filtered_by_lines(self):
+        """Test filtering arrivals by specific lines."""
+        mock_response = [
+            {"Shilut": "1א", "MinutesToArrival": 4, "MinutesToArrivalList": [4, 34]},
+            {"Shilut": "5", "MinutesToArrival": 8, "MinutesToArrivalList": [8, 25]},
+            {"Shilut": "10", "MinutesToArrival": 12, "MinutesToArrivalList": [12]},
+        ]
+
+        with patch.object(GovApiClient, "_make_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+            async with GovApiClient() as client:
+                result = await client.get_arrivals("12665", lines=["1א", "10"])
+
+            assert len(result) == 2
+            assert result[0]["Shilut"] == "1א"
+            assert result[1]["Shilut"] == "10"
