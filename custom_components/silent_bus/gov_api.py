@@ -61,3 +61,34 @@ class GovApiClient:
         """Close the client session."""
         if self._own_session and self._session:
             await self._session.close()
+
+    async def _make_request(self, url: str) -> dict[str, Any] | list[Any]:
+        """Make HTTP request to bus.gov.il API."""
+        if not self._session:
+            raise ApiConnectionError("Session not initialized")
+
+        try:
+            timeout = ClientTimeout(total=GOV_API_TIMEOUT)
+            async with self._session.get(
+                url,
+                headers=self._headers,
+                timeout=timeout,
+            ) as response:
+                response.raise_for_status()
+                return await response.json()
+
+        except aiohttp.ClientError as err:
+            raise ApiConnectionError(f"Failed to connect to API: {err}") from err
+        except Exception as err:
+            raise ApiConnectionError(f"Unexpected error: {err}") from err
+
+    async def get_station(self, makat: str, locale: str = "he") -> dict[str, Any]:
+        """Get station information by Makat."""
+        url = f"{GOV_API_BASE_URL}/GetBusStopByMakat/{makat}/{locale}/false"
+        _LOGGER.debug("Getting station info for Makat %s", makat)
+
+        result = await self._make_request(url)
+        if not isinstance(result, dict):
+            return {"Name": None, "Makat": 0}
+
+        return result

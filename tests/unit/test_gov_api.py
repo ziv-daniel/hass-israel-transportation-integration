@@ -1,6 +1,6 @@
 """Tests for bus.gov.il API client."""
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import aiohttp
 import pytest
@@ -23,3 +23,46 @@ class TestGovApiClientInit:
         client = GovApiClient()
         assert client._session is None
         assert client._own_session is True
+
+
+class TestGetStation:
+    """Test get_station method."""
+
+    @pytest.mark.asyncio
+    async def test_get_station_valid(self):
+        """Test getting a valid station."""
+        mock_response = {
+            "Id": 0,
+            "Name": "אלי מויאל/דוד המלך",
+            "Longitude": 34.596388999999995,
+            "Latitude": 31.540779999999998,
+            "Makat": 12665,
+        }
+
+        with patch.object(GovApiClient, "_make_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+            async with GovApiClient() as client:
+                result = await client.get_station("12665")
+
+            assert result["Name"] == "אלי מויאל/דוד המלך"
+            assert result["Makat"] == 12665
+            mock_request.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_station_invalid(self):
+        """Test getting an invalid station returns null values."""
+        mock_response = {
+            "Id": 0,
+            "Name": None,
+            "Longitude": 0.0,
+            "Latitude": 0.0,
+            "Makat": 0,
+        }
+
+        with patch.object(GovApiClient, "_make_request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+            async with GovApiClient() as client:
+                result = await client.get_station("99999")
+
+            assert result["Name"] is None
+            assert result["Makat"] == 0
