@@ -15,6 +15,7 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import ApiConnectionError, BusNearbyApiClient
+from .gov_api import GovApiClient
 from .const import (
     CONF_BUS_LINES,
     CONF_FROM_STATION,
@@ -120,22 +121,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
 
         else:
-            # Bus/Light Rail configuration
+            # Bus/Light Rail configuration - use gov API
             station_id = entry.data[CONF_STATION_ID]
             station_name = entry.data[CONF_STATION_NAME]
             bus_lines = entry.data[CONF_BUS_LINES]
 
-            # Validate station
-            is_valid = await api_client.validate_station(station_id)
+            # Create gov API client
+            gov_api_client = GovApiClient(session)
+
+            # Validate station with gov API
+            is_valid = await gov_api_client.validate_station(station_id)
             if not is_valid:
                 raise ConfigEntryNotReady(
                     f"Station {station_id} is not accessible. Please check your configuration."
                 )
 
-            # Create coordinator for bus/light rail
+            # Create coordinator for bus/light rail with gov API
             coordinator = SilentBusCoordinator(
                 hass=hass,
-                api_client=api_client,
+                gov_api_client=gov_api_client,
                 update_interval=update_interval,
                 config_entry=entry,
                 transport_type=transport_type,
