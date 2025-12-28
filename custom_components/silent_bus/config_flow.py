@@ -161,9 +161,13 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
             default_method = "manual"
 
-        data_schema = vol.Schema({
-            vol.Required("selection_method", default=default_method): vol.In(options),
-        })
+        data_schema = vol.Schema(
+            {
+                vol.Required("selection_method", default=default_method): vol.In(
+                    options
+                ),
+            }
+        )
 
         return self.async_show_form(
             step_id="station_selection_method",
@@ -207,14 +211,16 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return await self.async_step_station_config()
 
         # Build city options dictionary
-        city_options = {city['id']: city['name'] for city in cities}
+        city_options = {city["id"]: city["name"] for city in cities}
 
         # Add manual entry fallback option
         city_options["manual"] = "🔍 Enter station ID manually..."
 
-        data_schema = vol.Schema({
-            vol.Required("city_id"): vol.In(city_options),
-        })
+        data_schema = vol.Schema(
+            {
+                vol.Required("city_id"): vol.In(city_options),
+            }
+        )
 
         return self.async_show_form(
             step_id="select_city",
@@ -249,11 +255,13 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Get station details from GTFS data
             stations = get_stations_for_city(self._selected_city)
-            selected_station = next((s for s in stations if s['id'] == station_id), None)
+            selected_station = next(
+                (s for s in stations if s["id"] == station_id), None
+            )
 
             if selected_station:
                 self._station_id = station_id
-                self._station_name = selected_station['name']
+                self._station_name = selected_station["name"]
 
                 # Move to bus lines selection
                 return await self.async_step_bus_lines()
@@ -269,16 +277,18 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Build station options (limit to reasonable number for UI)
         # Sort by name and take first 100 stations
-        sorted_stations = sorted(stations, key=lambda s: s['name'])[:100]
+        sorted_stations = sorted(stations, key=lambda s: s["name"])[:100]
 
-        station_options = {s['id']: s['name'] for s in sorted_stations}
+        station_options = {s["id"]: s["name"] for s in sorted_stations}
 
         # Add manual entry fallback
         station_options["manual"] = "🔍 Enter station ID manually..."
 
-        data_schema = vol.Schema({
-            vol.Required("station_id"): vol.In(station_options),
-        })
+        data_schema = vol.Schema(
+            {
+                vol.Required("station_id"): vol.In(station_options),
+            }
+        )
 
         return self.async_show_form(
             step_id="select_station",
@@ -373,11 +383,13 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Get station names from train stations list
             stations_list = get_train_stations_list()
-            station = next((s for s in stations_list if s['id'] == station_id), None)
+            station = next(
+                (s for s in stations_list if s["id"] == station_id), None
+            )
 
             if station:
                 self._from_station = station_id
-                self._from_station_name = station['name_en']
+                self._from_station_name = station["name_en"]
 
                 # Move to TO station selection
                 return await self.async_step_train_select_to()
@@ -387,14 +399,16 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Get train stations list
         stations_list = get_train_stations_list()
-        station_options = {s['id']: s['name'] for s in stations_list}
+        station_options = {s["id"]: s["name"] for s in stations_list}
 
         # Add manual entry option
         station_options["manual"] = "🔍 Enter station ID manually..."
 
-        data_schema = vol.Schema({
-            vol.Required("from_station"): vol.In(station_options),
-        })
+        data_schema = vol.Schema(
+            {
+                vol.Required("from_station"): vol.In(station_options),
+            }
+        )
 
         return self.async_show_form(
             step_id="train_select_from",
@@ -426,11 +440,13 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Get station names from train stations list
             stations_list = get_train_stations_list()
-            station = next((s for s in stations_list if s['id'] == station_id), None)
+            station = next(
+                (s for s in stations_list if s["id"] == station_id), None
+            )
 
             if station:
                 self._to_station = station_id
-                self._to_station_name = station['name_en']
+                self._to_station_name = station["name_en"]
 
                 # Validate: FROM and TO must be different
                 if self._from_station == self._to_station:
@@ -456,17 +472,19 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Get train stations list (exclude the FROM station)
         stations_list = get_train_stations_list()
         station_options = {
-            s['id']: s['name']
+            s["id"]: s["name"]
             for s in stations_list
-            if s['id'] != self._from_station  # Exclude FROM station
+            if s["id"] != self._from_station  # Exclude FROM station
         }
 
         # Add manual entry option
         station_options["manual"] = "🔍 Enter station ID manually..."
 
-        data_schema = vol.Schema({
-            vol.Required("to_station"): vol.In(station_options),
-        })
+        data_schema = vol.Schema(
+            {
+                vol.Required("to_station"): vol.In(station_options),
+            }
+        )
 
         return self.async_show_form(
             step_id="train_select_to",
