@@ -132,50 +132,52 @@ class SilentBusCoordinator(DataUpdateCoordinator):
                 processed_data = self._process_train_routes(itineraries)
 
             else:
-                # Fetch bus/light rail arrivals
-                _LOGGER.debug(
-                    "Fetching data for %s, lines: %s",
-                    self._station_display,
-                    self.bus_lines,
-                )
-
-                arrivals = await self.api_client.get_stop_times(
-                    self.station_id,
-                    self.bus_lines,
-                    number_of_departures=self.max_arrivals,
-                )
-
-                _LOGGER.debug(
-                    "Received %d arrivals from API for %s",
-                    len(arrivals) if arrivals else 0,
-                    self._station_display,
-                )
-
-                # Process arrivals into structured data
-                processed_data = self._process_arrivals(arrivals)
-
-                _LOGGER.debug(
-                    "Processed data for %s: lines found=%s, tracking lines=%s",
-                    self._station_display,
-                    list(processed_data.keys()) if processed_data else [],
-                    self.bus_lines,
-                )
-
-                # Log warning if no data for tracked lines
-                if not processed_data and arrivals:
-                    _LOGGER.warning(
-                        "%s: API returned %d arrivals but none matched tracked lines %s. "
-                        "Available lines in response: %s",
+                # Bus/Light Rail - use gov API if available, else BusNearby
+                if self.gov_api_client:
+                    processed_data = await self._fetch_gov_arrivals()
+                else:
+                    # Fallback to BusNearby (legacy)
+                    _LOGGER.debug(
+                        "Fetching data for %s, lines: %s",
                         self._station_display,
-                        len(arrivals),
                         self.bus_lines,
-                        list(set(a.get("routeShortName", "?") for a in arrivals)),
                     )
-                elif not processed_data and not arrivals:
-                    _LOGGER.info(
-                        "%s: No arrivals returned by API (station may have no service at this time)",
+
+                    arrivals = await self.api_client.get_stop_times(
+                        self.station_id,
+                        self.bus_lines,
+                        number_of_departures=self.max_arrivals,
+                    )
+
+                    _LOGGER.debug(
+                        "Received %d arrivals from API for %s",
+                        len(arrivals) if arrivals else 0,
                         self._station_display,
                     )
+
+                    processed_data = self._process_arrivals(arrivals)
+
+                    _LOGGER.debug(
+                        "Processed data for %s: lines found=%s, tracking lines=%s",
+                        self._station_display,
+                        list(processed_data.keys()) if processed_data else [],
+                        self.bus_lines,
+                    )
+
+                    if not processed_data and arrivals:
+                        _LOGGER.warning(
+                            "%s: API returned %d arrivals but none matched tracked lines %s. "
+                            "Available lines in response: %s",
+                            self._station_display,
+                            len(arrivals),
+                            self.bus_lines,
+                            list(set(a.get("routeShortName", "?") for a in arrivals)),
+                        )
+                    elif not processed_data and not arrivals:
+                        _LOGGER.info(
+                            "%s: No arrivals returned by API (station may have no service at this time)",
+                            self._station_display,
+                        )
 
             # Adjust update interval based on data
             self._adjust_update_interval(processed_data)
@@ -311,6 +313,83 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         # Sort routes by departure time
         if route_key in processed:
             processed[route_key].sort(key=lambda x: x["minutes_until"])
+
+        return processed
+
+    async def _fetch_gov_arrivals(self) -> dict[str, Any]:
+        """Fetch arrivals from bus.gov.il API.
+
+        Returns:
+            Dictionary mapping line numbers to processed arrival data
+        """
+        if not self.gov_api_client:
+            raise UpdateFailed("Gov API client not initialized")
+
+        _LOGGER.debug(
+            "Fetching gov API data for %s, lines: %s",
+            self._station_display,
+            self.bus_lines,
+        )
+
+        arrivals = await self.gov_api_client.get_arrivals(
+            self.station_id,
+            lines=self.bus_lines,
+        )
+
+        _LOGGER.debug(
+            "Received %d arrivals from gov API for %s",
+            len(arrivals) if arrivals else 0,
+            self._station_display,
+        )
+
+        return self._process_gov_arrivals(arrivals)
+
+    def _process_gov_arrivals(self, arrivals: list[dict[str, Any]]) -> dict[str, Any]:
+        """Process arrivals from bus.gov.il into sensor format.
+
+        Args:
+            arrivals: Raw arrivals from gov API
+
+        Returns:
+            Dictionary mapping line numbers to processed arrival data
+        """
+        processed: dict[str, list[dict[str, Any]]] = {}
+
+        for arrival in arrivals:
+            line_number = arrival.get("Shilut")
+            if not line_number:
+                continue
+
+            minutes_list = arrival.get("MinutesToArrivalList", [])
+            if not minutes_list:
+                # Fallback to single value
+                single_min = arrival.get("MinutesToArrival")
+                if single_min is not None:
+                    minutes_list = [single_min]
+
+            direction = arrival.get("Description", "")
+            operator = arrival.get("CompanyName", "")
+
+            # Create arrival entries for each upcoming arrival
+            line_arrivals = []
+            for minutes in minutes_list:
+                line_arrivals.append({
+                    "minutes_until": minutes,
+                    "is_realtime": True,  # Gov API always returns real-time
+                    "direction": direction,
+                    "operator": operator,
+                })
+
+            if line_number not in processed:
+                processed[line_number] = []
+
+            processed[line_number].extend(line_arrivals)
+
+        # Sort arrivals by time for each line
+        for line_number in processed:
+            processed[line_number].sort(key=lambda x: x["minutes_until"])
+            # Limit to max_arrivals
+            processed[line_number] = processed[line_number][: self.max_arrivals]
 
         return processed
 
