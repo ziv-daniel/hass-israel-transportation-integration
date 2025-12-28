@@ -549,11 +549,20 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     # Validate and get station name using search endpoint
                     try:
                         stations = await api_client.search_station(station_id)
+                        _LOGGER.info(
+                            "Search API response for '%s': %s",
+                            station_id,
+                            stations[:3] if stations else "empty",
+                        )
                         if not stations or len(stations) == 0:
                             errors["base"] = ERROR_STATION_NOT_FOUND
                         else:
                             # Get station info from search results
                             first_station = stations[0]
+                            _LOGGER.info(
+                                "First station raw data: %s",
+                                first_station,
+                            )
                             self._station_name = first_station.get(
                                 "stop_name",
                                 first_station.get("name", f"Station {station_id}"),
@@ -565,14 +574,18 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                                 "stop_id", first_station.get("id", station_id)
                             )
                             self._station_id = actual_stop_id
-                            _LOGGER.debug(
-                                "Station lookup: user input=%s -> stop_id=%s, name=%s",
+                            _LOGGER.info(
+                                "Station lookup: user input=%s -> actual_stop_id=%s, name=%s",
                                 station_id,
                                 actual_stop_id,
                                 self._station_name,
                             )
 
                             # Validate API response format before proceeding
+                            _LOGGER.info(
+                                "Calling validate_station_api_response with stop_id=%s",
+                                actual_stop_id,
+                            )
                             (
                                 is_valid,
                                 error_msg,

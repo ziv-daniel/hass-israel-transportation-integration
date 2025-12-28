@@ -301,7 +301,7 @@ class BusNearbyApiClient:
         try:
             data = await self._make_request(url, params)
 
-            _LOGGER.debug(
+            _LOGGER.info(
                 "Raw API response for station %s: type=%s, data=%s",
                 stop_id,
                 type(data).__name__,

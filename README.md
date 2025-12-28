@@ -1,12 +1,12 @@
 # Silent Bus - Home Assistant Integration
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/release/ziv-daniel/Silent-bus-integration.svg?style=for-the-badge)](https://github.com/ziv-daniel/Silent-bus-integration/releases)
-[![License](https://img.shields.io/github/license/ziv-daniel/Silent-bus-integration.svg?style=for-the-badge)](LICENSE)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
+[![GitHub Release](https://img.shields.io/github/release/ziv-daniel/hass-israel-transportation-integration.svg?style=for-the-badge&color=blue)](https://github.com/ziv-daniel/hass-israel-transportation-integration/releases)
+[![License](https://img.shields.io/github/license/ziv-daniel/hass-israel-transportation-integration.svg?style=for-the-badge&color=blue)](LICENSE)
 
-[![hassfest](https://img.shields.io/github/actions/workflow/status/ziv-daniel/Silent-bus-integration/hassfest.yaml?branch=main&label=hassfest&style=flat-square)](https://github.com/ziv-daniel/Silent-bus-integration/actions/workflows/hassfest.yaml)
-[![HACS](https://img.shields.io/github/actions/workflow/status/ziv-daniel/Silent-bus-integration/hacs.yaml?branch=main&label=HACS&style=flat-square)](https://github.com/ziv-daniel/Silent-bus-integration/actions/workflows/hacs.yaml)
-[![Tests](https://img.shields.io/github/actions/workflow/status/ziv-daniel/Silent-bus-integration/test.yaml?branch=main&label=tests&style=flat-square)](https://github.com/ziv-daniel/Silent-bus-integration/actions/workflows/test.yaml)
+[![hassfest](https://img.shields.io/github/actions/workflow/status/ziv-daniel/hass-israel-transportation-integration/hassfest.yaml?branch=main&label=hassfest&style=flat-square)](https://github.com/ziv-daniel/hass-israel-transportation-integration/actions/workflows/hassfest.yaml)
+[![HACS](https://img.shields.io/github/actions/workflow/status/ziv-daniel/hass-israel-transportation-integration/hacs.yaml?branch=main&label=HACS&style=flat-square)](https://github.com/ziv-daniel/hass-israel-transportation-integration/actions/workflows/hacs.yaml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/ziv-daniel/hass-israel-transportation-integration/test.yaml?branch=main&label=tests&style=flat-square)](https://github.com/ziv-daniel/hass-israel-transportation-integration/actions/workflows/test.yaml)
 
 A comprehensive Home Assistant integration for monitoring Israeli public transportation in real-time. Track buses, trains, and light rail with live arrival times and get notified when your ride is approaching.
 
@@ -33,7 +33,7 @@ A comprehensive Home Assistant integration for monitoring Israeli public transpo
 2. Click on "Integrations"
 3. Click the three dots in the top right corner
 4. Select "Custom repositories"
-5. Add this repository URL: `https://github.com/ziv-daniel/Silent-bus-integration`
+5. Add this repository URL: `https://github.com/ziv-daniel/hass-israel-transportation-integration`
 6. Select category: "Integration"
 7. Click "Add"
 8. Find "Silent Bus" in the integrations list
@@ -42,7 +42,7 @@ A comprehensive Home Assistant integration for monitoring Israeli public transpo
 
 ### Manual Installation
 
-1. Download the latest release from the [releases page](https://github.com/ziv-daniel/Silent-bus-integration/releases)
+1. Download the latest release from the [releases page](https://github.com/ziv-daniel/hass-israel-transportation-integration/releases)
 2. Extract the `custom_components/silent_bus` folder
 3. Copy it to your Home Assistant `custom_components` directory
 4. Restart Home Assistant
@@ -433,8 +433,8 @@ This integration uses the [BusNearby API](https://app.busnearby.co.il), which pr
 
 ```bash
 # Clone the repository
-git clone https://github.com/ziv-daniel/Silent-bus-integration.git
-cd Silent-bus-integration
+git clone https://github.com/ziv-daniel/hass-israel-transportation-integration.git
+cd hass-israel-transportation-integration
 
 # Install development dependencies
 pip install -r requirements_test.txt
@@ -506,8 +506,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- 🐛 **Report bugs**: [GitHub Issues](https://github.com/ziv-daniel/Silent-bus-integration/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/ziv-daniel/Silent-bus-integration/discussions)
+- 🐛 **Report bugs**: [GitHub Issues](https://github.com/ziv-daniel/hass-israel-transportation-integration/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/ziv-daniel/hass-israel-transportation-integration/discussions)
 - 📖 **Documentation**: [Integration Plan](INTEGRATION_PLAN.md)
 
 ## Changelog

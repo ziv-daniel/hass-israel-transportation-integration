@@ -374,9 +374,7 @@ async def test_validate_station_api_response_connection_error():
 async def test_validate_train_route_api_response_success():
     """Test validate_train_route_api_response returns True for valid response."""
     mock_response = MagicMock()
-    mock_response.json = AsyncMock(
-        return_value={"plan": {"itineraries": []}}
-    )
+    mock_response.json = AsyncMock(return_value={"plan": {"itineraries": []}})
     mock_response.raise_for_status = MagicMock()
 
     mock_session = MagicMock(spec=aiohttp.ClientSession)
@@ -385,9 +383,7 @@ async def test_validate_train_route_api_response_success():
     )
 
     client = BusNearbyApiClient(session=mock_session)
-    is_valid, error_msg = await client.validate_train_route_api_response(
-        "3600", "2800"
-    )
+    is_valid, error_msg = await client.validate_train_route_api_response("3600", "2800")
 
     assert is_valid is True
     assert error_msg == ""
@@ -406,9 +402,7 @@ async def test_validate_train_route_api_response_invalid_format():
     )
 
     client = BusNearbyApiClient(session=mock_session)
-    is_valid, error_msg = await client.validate_train_route_api_response(
-        "3600", "2800"
-    )
+    is_valid, error_msg = await client.validate_train_route_api_response("3600", "2800")
 
     assert is_valid is False
     assert "expected" in error_msg.lower() or "invalid" in error_msg.lower()

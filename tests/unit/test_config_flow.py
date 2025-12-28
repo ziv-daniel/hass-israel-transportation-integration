@@ -303,3 +303,69 @@ async def test_options_flow_update(hass: HomeAssistant):
 
         # Options flow completes successfully
         assert result["type"] == FlowResultType.CREATE_ENTRY
+
+
+@pytest.mark.asyncio
+async def test_stop_code_to_stop_id_translation(hass: HomeAssistant):
+    """Test that stop_code entered by user is translated to stop_id from API.
+
+    This is a critical test case: Users enter the stop_code displayed on bus stop signs
+    (e.g., 12665), but the stoptimes API requires the internal stop_id (e.g., 44592).
+    The search API returns both, and the integration must use the stop_id for API calls.
+    """
+    from custom_components.silent_bus.const import (
+        CONF_TRANSPORT_TYPE,
+        TRANSPORT_TYPE_BUS,
+    )
+
+    # User enters stop_code "12665", but API returns stop_id "44592"
+    search_result = [
+        {
+            "stop_id": "44592",  # This is what API calls need
+            "stop_code": "12665",  # This is what user enters
+            "stop_name": "אלי מויאל/דוד המלך",
+            "latitude": 31.54078,
+            "longitude": 34.596389,
+        }
+    ]
+
+    with patch(
+        "custom_components.silent_bus.config_flow.BusNearbyApiClient"
+    ) as mock_client:
+        mock_client.return_value.search_station = AsyncMock(return_value=search_result)
+        mock_client.return_value.validate_station_api_response = AsyncMock(
+            return_value=(True, "")
+        )
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+
+        # Configure transport type
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
+        )
+
+        # Select manual entry method
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"selection_method": "manual"},
+        )
+
+        # Enter stop_code "12665" (what user sees on bus stop sign)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_STATION_ID: "12665"},
+        )
+
+        # Configure bus lines
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {CONF_BUS_LINES: "1, 5, 1א"},
+        )
+
+        assert result["type"] == FlowResultType.CREATE_ENTRY
+        # CRITICAL: The saved stop_id should be "44592" (from API), NOT "12665" (user input)
+        assert result["data"][CONF_STATION_ID] == "44592"
+        assert result["data"][CONF_BUS_LINES] == ["1", "5", "1א"]
