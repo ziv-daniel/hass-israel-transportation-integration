@@ -47,6 +47,10 @@ MAX_SCAN_INTERVAL: Final = timedelta(minutes=10)
 API_BASE_URL: Final = "https://api.busnearby.co.il"
 API_SEARCH_URL: Final = "https://app.busnearby.co.il/stopSearch"
 API_TIMEOUT: Final = 10
+
+# bus.gov.il API configuration (for buses and light rail)
+GOV_API_BASE_URL: Final = "https://bus.gov.il/WebApi/api/passengerinfo"
+GOV_API_TIMEOUT: Final = 15
 MAX_RETRIES: Final = 3
 RETRY_DELAY: Final = 2
 
@@ -68,7 +72,8 @@ ATTR_LAST_UPDATE: Final = "last_update"
 ATTR_ATTRIBUTION: Final = "attribution"
 
 # Attribution
-ATTRIBUTION: Final = "Data provided by BusNearby"
+ATTRIBUTION_BUSNEARBY: Final = "Data provided by BusNearby"
+ATTRIBUTION_GOV: Final = "Data provided by Israel Ministry of Transportation"
 
 # Error messages
 ERROR_STATION_NOT_FOUND: Final = "station_not_found"
