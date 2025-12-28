@@ -1,4 +1,4 @@
-# Silent Bus - Home Assistant Integration
+# Israel Transportation - Home Assistant Integration
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/ziv-daniel/hass-israel-transportation-integration.svg?style=for-the-badge&color=blue)](https://github.com/ziv-daniel/hass-israel-transportation-integration/releases)
@@ -36,7 +36,7 @@ A comprehensive Home Assistant integration for monitoring Israeli public transpo
 5. Add this repository URL: `https://github.com/ziv-daniel/hass-israel-transportation-integration`
 6. Select category: "Integration"
 7. Click "Add"
-8. Find "Silent Bus" in the integrations list
+8. Find "Israel Transportation" in the integrations list
 9. Click "Download"
 10. Restart Home Assistant
 
@@ -53,7 +53,7 @@ A comprehensive Home Assistant integration for monitoring Israeli public transpo
 
 1. Go to **Settings** → **Devices & Services**
 2. Click **Add Integration**
-3. Search for **Silent Bus**
+3. Search for **Israel Transportation**
 4. Follow the configuration steps:
    - **Step 1**: Select transport type (Bus, Train, or Light Rail)
    - **For Buses/Light Rail**:
@@ -355,7 +355,7 @@ The integration provides custom services for advanced automation scenarios:
 Force an immediate refresh of arrival times data. Useful when you want the latest information before making a decision.
 
 **Parameters:**
-- `entity_id` (optional): Specific entity to refresh. If not provided, all Silent Bus integrations will be refreshed.
+- `entity_id` (optional): Specific entity to refresh. If not provided, all Israel Transportation entities will be refreshed.
 
 **Example:**
 ```yaml
@@ -369,7 +369,7 @@ data:
 Dynamically update the bus lines being tracked for a station. Perfect for adjusting monitored routes based on time of day or other conditions. Only works for bus and light rail sensors, not trains.
 
 **Parameters:**
-- `entity_id` (required): The Silent Bus entity to update
+- `entity_id` (required): The Israel Transportation entity to update
 - `lines` (required): Comma-separated list of bus line numbers
 
 **Example:**
