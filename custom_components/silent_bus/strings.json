@@ -5,10 +5,50 @@
         "title": "Israel Transportation Setup",
         "description": "Configure your transportation monitoring",
         "data": {
+          "transport_type": "Transport Type"
+        }
+      },
+      "station_selection_method": {
+        "title": "Station Selection Method",
+        "description": "How would you like to find your {transport_type} station?",
+        "data": {
+          "selection_method": "Selection Method"
+        }
+      },
+      "select_city": {
+        "title": "Select City",
+        "description": "Choose a city to see available {transport_type} stations",
+        "data": {
+          "city_id": "City"
+        }
+      },
+      "select_station": {
+        "title": "Select Station in {city_name}",
+        "description": "Choose from {station_count} available stations",
+        "data": {
+          "station_id": "Station"
+        }
+      },
+      "station_config": {
+        "title": "Enter Station ID",
+        "description": "Enter your station number manually",
+        "data": {
           "station_id": "Station Number"
         },
         "data_description": {
-          "station_id": "Enter the bus station number (e.g., 24068). You can find station numbers at https://www.bus.co.il"
+          "station_id": "You can find station numbers at https://www.bus.co.il (e.g., 24068 for Arlozorov Terminal)"
+        }
+      },
+      "train_config": {
+        "title": "Train Route Setup",
+        "description": "Configure your train route",
+        "data": {
+          "from_station": "From Station",
+          "to_station": "To Station"
+        },
+        "data_description": {
+          "from_station": "Origin station ID (e.g., 3600 for Tel Aviv Center)",
+          "to_station": "Destination station ID (e.g., 2800 for Haifa Center)"
         }
       },
       "bus_lines": {

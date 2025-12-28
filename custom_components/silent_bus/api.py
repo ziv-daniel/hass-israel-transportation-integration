@@ -279,9 +279,9 @@ class BusNearbyApiClient:
             True if station is valid and accessible
         """
         try:
-            # Try to get stop times for the station
-            await self.get_stop_times(station_id, number_of_departures=1)
-            return True
+            # Use search endpoint for validation (better coverage)
+            result = await self.search_station(station_id)
+            return result is not None and len(result) > 0
         except BusNearbyApiError:
             return False
 

@@ -5,6 +5,48 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2025-12-28
+
+### Added
+- **GTFS-Based Station Selection**: Revolutionary new station discovery system
+  - 🌍 Access to ALL ~35,000 Israeli transit stations (buses, trains, light rail)
+  - 🏙️ City-based cascade dropdown for easy navigation
+  - 📊 33 cities with automatic station categorization
+  - 📥 Powered by official Israeli Ministry of Transport GTFS data
+  - 🔄 Auto-updates every 3 days via GitHub Actions
+  - 🔍 Manual entry fallback still available for any station
+  - ⚡ Government-backed authoritative data source (gtfs.mot.gov.il)
+
+- **Automated Data Management**
+  - GitHub Actions workflow for automated GTFS updates
+  - Runs every 3 days to download latest station data
+  - Automatic version bumping and changelog updates
+  - Automatic release creation when data changes
+  - Self-maintaining infrastructure
+
+### Fixed
+- **Station Validation**: Improved validation using search endpoint
+  - Fixes issue where valid stations (like 12664) were rejected
+  - Single API call for faster validation and name retrieval
+  - Better coverage aligned with official bus.gov.il database
+  - Eliminates duplicate API calls during configuration
+
+### Changed
+- **Config Flow**: Enhanced multi-step configuration
+  - New station selection method step (city dropdown vs manual entry)
+  - New city selection step (choose from 33 cities)
+  - New station selection step (filtered by city)
+  - Graceful fallback to manual entry if GTFS data unavailable
+  - Improved UX for discovering stations
+
+### Technical
+- Added `gtfs_loader.py` module for efficient GTFS data loading
+- Added `scripts/update_gtfs_data.py` for automated data updates
+- Added `scripts/get_version.py`, `bump_version.py`, `update_changelog.py`
+- Created `gtfs_data/cities_index.json` with 34,860 stations
+- Updated `config_flow.py` with cascade dropdown implementation
+- Phase 1 validation fix applied to all config steps
+
 ## [1.3.0] - 2025-12-27
 
 ### Changed
