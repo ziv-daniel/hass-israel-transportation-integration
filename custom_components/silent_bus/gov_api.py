@@ -130,7 +130,9 @@ class GovApiClient:
                 - CompanyName: Bus company name
                 - BusstopHebrewName: Station name in Hebrew
         """
-        url = f"{GOV_API_BASE_URL}/GetRealtimeBusLineListByBustop/{makat}/{locale}/false"
+        url = (
+            f"{GOV_API_BASE_URL}/GetRealtimeBusLineListByBustop/{makat}/{locale}/false"
+        )
         _LOGGER.debug("Getting arrivals for Makat %s, lines filter: %s", makat, lines)
 
         result = await self._make_request(url)

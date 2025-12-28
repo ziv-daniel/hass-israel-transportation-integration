@@ -551,12 +551,17 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     # Validate station directly with gov API
                     station_info = await gov_client.get_station(station_id)
 
-                    if station_info.get("Name") is None or station_info.get("Makat", 0) == 0:
+                    if (
+                        station_info.get("Name") is None
+                        or station_info.get("Makat", 0) == 0
+                    ):
                         errors["base"] = ERROR_STATION_NOT_FOUND
                     else:
                         # Station is valid - use Makat directly
                         self._station_id = station_id
-                        self._station_name = station_info.get("Name", f"Station {station_id}")
+                        self._station_name = station_info.get(
+                            "Name", f"Station {station_id}"
+                        )
 
                         _LOGGER.info(
                             "Station validated: makat=%s, name=%s",

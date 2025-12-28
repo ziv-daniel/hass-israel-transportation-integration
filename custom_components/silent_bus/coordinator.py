@@ -35,7 +35,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         hass: HomeAssistant,
         *,
         api_client: BusNearbyApiClient | None = None,  # Keep for trains
-        gov_api_client: GovApiClient | None = None,    # New for bus/light_rail
+        gov_api_client: GovApiClient | None = None,  # New for bus/light_rail
         update_interval: timedelta,
         config_entry=None,
         max_arrivals: int = DEFAULT_MAX_ARRIVALS,
@@ -374,12 +374,14 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             # Create arrival entries for each upcoming arrival
             line_arrivals = []
             for minutes in minutes_list:
-                line_arrivals.append({
-                    "minutes_until": minutes,
-                    "is_realtime": True,  # Gov API always returns real-time
-                    "direction": direction,
-                    "operator": operator,
-                })
+                line_arrivals.append(
+                    {
+                        "minutes_until": minutes,
+                        "is_realtime": True,  # Gov API always returns real-time
+                        "direction": direction,
+                        "operator": operator,
+                    }
+                )
 
             if line_number not in processed:
                 processed[line_number] = []
