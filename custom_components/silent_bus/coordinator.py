@@ -10,6 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api import BusNearbyApiClient, BusNearbyApiError
+from .gov_api import GovApiClient
 from .const import (
     APPROACHING_THRESHOLD,
     DEFAULT_MAX_ARRIVALS,
@@ -32,7 +33,8 @@ class SilentBusCoordinator(DataUpdateCoordinator):
     def __init__(
         self,
         hass: HomeAssistant,
-        api_client: BusNearbyApiClient,
+        api_client: BusNearbyApiClient | None = None,  # Keep for trains
+        gov_api_client: GovApiClient | None = None,    # New for bus/light_rail
         update_interval: timedelta,
         config_entry=None,
         max_arrivals: int = DEFAULT_MAX_ARRIVALS,
@@ -51,7 +53,8 @@ class SilentBusCoordinator(DataUpdateCoordinator):
 
         Args:
             hass: Home Assistant instance
-            api_client: BusNearby API client
+            api_client: BusNearby API client (for trains)
+            gov_api_client: Government API client (for bus/light rail)
             update_interval: How often to update data
             config_entry: Config entry (optional, required for async_config_entry_first_refresh)
             max_arrivals: Maximum number of arrivals to track per line
@@ -65,6 +68,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             to_station_name: Destination station name (for trains)
         """
         self.api_client = api_client
+        self.gov_api_client = gov_api_client
         self.transport_type = transport_type
         self.max_arrivals = max_arrivals
         self._base_update_interval = update_interval
