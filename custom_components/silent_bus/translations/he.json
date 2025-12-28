@@ -2,13 +2,53 @@
   "config": {
     "step": {
       "user": {
-        "title": "הגדרת Silent Bus",
-        "description": "הגדר מעקב אחר תחנת אוטובוס",
+        "title": "הגדרת תחבורה ישראלית",
+        "description": "הגדר מעקב אחר תחבורה ציבורית",
+        "data": {
+          "transport_type": "סוג תחבורה"
+        }
+      },
+      "station_selection_method": {
+        "title": "שיטת בחירת תחנה",
+        "description": "איך תרצה למצוא את תחנת ה{transport_type} שלך?",
+        "data": {
+          "selection_method": "שיטת בחירה"
+        }
+      },
+      "select_city": {
+        "title": "בחירת עיר",
+        "description": "בחר עיר כדי לראות תחנות {transport_type} זמינות",
+        "data": {
+          "city_id": "עיר"
+        }
+      },
+      "select_station": {
+        "title": "בחירת תחנה ב{city_name}",
+        "description": "בחר מתוך {station_count} תחנות זמינות",
+        "data": {
+          "station_id": "תחנה"
+        }
+      },
+      "station_config": {
+        "title": "הזנת מספר תחנה",
+        "description": "הזן את מספר התחנה באופן ידני",
         "data": {
           "station_id": "מספר תחנה"
         },
         "data_description": {
-          "station_id": "הזן את מספר תחנת האוטובוס (לדוגמה: 24068). ניתן למצוא מספרי תחנות באתר https://www.bus.co.il"
+          "station_id": "ניתן למצוא מספרי תחנות באתר https://www.bus.co.il (לדוגמה: 24068 עבור תחנה מרכזית ארלוזורוב)"
+        }
+      },
+      "train_config": {
+        "title": "הגדרת מסלול רכבת",
+        "description": "הגדר את מסלול הרכבת שלך",
+        "data": {
+          "from_station": "מתחנה",
+          "to_station": "לתחנה"
+        },
+        "data_description": {
+          "from_station": "מספר תחנת מוצא (לדוגמה: 3600 עבור תל אביב מרכז)",
+          "to_station": "מספר תחנת יעד (לדוגמה: 2800 עבור חיפה מרכז)"
         }
       },
       "bus_lines": {
@@ -35,7 +75,7 @@
   "options": {
     "step": {
       "init": {
-        "title": "הגדרות Silent Bus",
+        "title": "הגדרות תחבורה ישראלית",
         "description": "שינוי הגדרות עבור {station_name}",
         "data": {
           "bus_lines": "קווי אוטובוס",

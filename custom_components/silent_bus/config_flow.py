@@ -21,6 +21,7 @@ from .gtfs_loader import (
     get_stations_for_city,
     is_gtfs_data_available,
 )
+from .train_stations import get_train_stations_list
 from .const import (
     CONF_BUS_LINES,
     CONF_FROM_STATION,
@@ -80,11 +81,8 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._transport_type = user_input[CONF_TRANSPORT_TYPE]
 
             # Route to appropriate configuration step
-            if self._transport_type == TRANSPORT_TYPE_TRAIN:
-                return await self.async_step_train_config()
-            else:
-                # For bus and light rail, ask how they want to select station
-                return await self.async_step_station_selection_method()
+            # For all transport types, ask how they want to select station
+            return await self.async_step_station_selection_method()
 
         # Show transport type selection
         data_schema = vol.Schema(
@@ -126,15 +124,31 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             selection_method = user_input["selection_method"]
 
             if selection_method == "city_dropdown":
+                # Bus/Light Rail: use city-based dropdown
                 return await self.async_step_select_city()
+            elif selection_method == "train_dropdown":
+                # Train: use train station dropdown
+                return await self.async_step_train_select_from()
             else:
-                return await self.async_step_station_config()
+                # Manual entry
+                if self._transport_type == TRANSPORT_TYPE_TRAIN:
+                    return await self.async_step_train_config()
+                else:
+                    return await self.async_step_station_config()
 
         # Check if GTFS data is available
         gtfs_available = is_gtfs_data_available()
 
-        # Build selection options
-        if gtfs_available:
+        # Build selection options based on transport type
+        if self._transport_type == TRANSPORT_TYPE_TRAIN:
+            # Train: offer train station dropdown or manual
+            options = {
+                "train_dropdown": "Select from train stations list (recommended)",
+                "manual": "Enter station ID manually",
+            }
+            default_method = "train_dropdown"
+        elif gtfs_available:
+            # Bus/Light Rail: offer city dropdown or manual
             options = {
                 "city_dropdown": "Browse stations by city (recommended)",
                 "manual": "Enter station ID manually",
@@ -336,6 +350,131 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             description_placeholders={
                 "station_help": f"Enter the {transport_label.lower()} station number (e.g., 24068). "
                 "You can find station numbers at https://www.bus.co.il"
+            },
+        )
+
+    async def async_step_train_select_from(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle FROM train station selection from dropdown.
+
+        Args:
+            user_input: User input data
+
+        Returns:
+            Flow result
+        """
+        if user_input is not None:
+            station_id = user_input["from_station"]
+
+            # Check if user chose manual entry
+            if station_id == "manual":
+                return await self.async_step_train_config()
+
+            # Get station names from train stations list
+            stations_list = get_train_stations_list()
+            station = next((s for s in stations_list if s['id'] == station_id), None)
+
+            if station:
+                self._from_station = station_id
+                self._from_station_name = station['name_en']
+
+                # Move to TO station selection
+                return await self.async_step_train_select_to()
+            else:
+                # Fallback to manual if station not found
+                return await self.async_step_train_config()
+
+        # Get train stations list
+        stations_list = get_train_stations_list()
+        station_options = {s['id']: s['name'] for s in stations_list}
+
+        # Add manual entry option
+        station_options["manual"] = "🔍 Enter station ID manually..."
+
+        data_schema = vol.Schema({
+            vol.Required("from_station"): vol.In(station_options),
+        })
+
+        return self.async_show_form(
+            step_id="train_select_from",
+            data_schema=data_schema,
+            description_placeholders={
+                "train_help": "Select the origin (FROM) train station"
+            },
+        )
+
+    async def async_step_train_select_to(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle TO train station selection from dropdown.
+
+        Args:
+            user_input: User input data
+
+        Returns:
+            Flow result
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            station_id = user_input["to_station"]
+
+            # Check if user chose manual entry
+            if station_id == "manual":
+                return await self.async_step_train_config()
+
+            # Get station names from train stations list
+            stations_list = get_train_stations_list()
+            station = next((s for s in stations_list if s['id'] == station_id), None)
+
+            if station:
+                self._to_station = station_id
+                self._to_station_name = station['name_en']
+
+                # Validate: FROM and TO must be different
+                if self._from_station == self._to_station:
+                    errors["to_station"] = "cannot_be_same"
+                else:
+                    # Create entry for train
+                    await self.async_set_unique_id(f"{self._from_station}_{self._to_station}")
+                    self._abort_if_unique_id_configured()
+
+                    return self.async_create_entry(
+                        title=f"{self._from_station_name} → {self._to_station_name}",
+                        data={
+                            CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN,
+                            CONF_FROM_STATION: self._from_station,
+                            CONF_TO_STATION: self._to_station,
+                            CONF_FROM_STATION_NAME: self._from_station_name,
+                            CONF_TO_STATION_NAME: self._to_station_name,
+                            CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
+                            CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
+                        },
+                    )
+
+        # Get train stations list (exclude the FROM station)
+        stations_list = get_train_stations_list()
+        station_options = {
+            s['id']: s['name']
+            for s in stations_list
+            if s['id'] != self._from_station  # Exclude FROM station
+        }
+
+        # Add manual entry option
+        station_options["manual"] = "🔍 Enter station ID manually..."
+
+        data_schema = vol.Schema({
+            vol.Required("to_station"): vol.In(station_options),
+        })
+
+        return self.async_show_form(
+            step_id="train_select_to",
+            data_schema=data_schema,
+            errors=errors,
+            description_placeholders={
+                "from_station": self._from_station_name,
+                "train_help": f"Select the destination (TO) train station from {self._from_station_name}"
             },
         )
 
