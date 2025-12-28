@@ -36,7 +36,6 @@ home-assistant_v2.db
 # Development files (not in public repo)
 tests/
 pytest.ini
-.pre-commit-config.yaml
 coverage/
 .coverage
 htmlcov/
