@@ -716,9 +716,7 @@ async def test_get_stop_times_parameters(hass):
     )
 
     client = BusNearbyApiClient(session=mock_session)
-    await client.get_stop_times(
-        "24068", number_of_departures=5, time_range=7200
-    )
+    await client.get_stop_times("24068", number_of_departures=5, time_range=7200)
 
     # Verify parameters
     call_args = mock_session.get.call_args

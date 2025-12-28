@@ -12,7 +12,6 @@ from homeassistant.data_entry_flow import FlowResultType
 from custom_components.silent_bus.api import (
     ApiConnectionError,
     ApiTimeoutError,
-    StationNotFoundError,
 )
 from custom_components.silent_bus.const import (
     CONF_BUS_LINES,
@@ -541,7 +540,10 @@ async def test_train_arrival_data_format(hass: HomeAssistant):
         assert CONF_MAX_ARRIVALS in result["data"]
 
         # Verify default values
-        assert result["data"][CONF_UPDATE_INTERVAL] == DEFAULT_SCAN_INTERVAL.total_seconds()
+        assert (
+            result["data"][CONF_UPDATE_INTERVAL]
+            == DEFAULT_SCAN_INTERVAL.total_seconds()
+        )
         assert result["data"][CONF_MAX_ARRIVALS] == DEFAULT_MAX_ARRIVALS
 
 
@@ -717,7 +719,9 @@ async def test_transport_type_selection_all_types_available(hass: HomeAssistant)
         # Should proceed to appropriate config step
         assert result["type"] == FlowResultType.FORM
         expected_step = (
-            "train_config" if transport_type == TRANSPORT_TYPE_TRAIN else "station_config"
+            "train_config"
+            if transport_type == TRANSPORT_TYPE_TRAIN
+            else "station_config"
         )
         assert result["step_id"] == expected_step
 
