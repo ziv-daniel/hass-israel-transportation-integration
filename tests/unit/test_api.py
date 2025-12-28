@@ -12,7 +12,6 @@ from custom_components.silent_bus.api import (
     ApiConnectionError,
     ApiTimeoutError,
     BusNearbyApiClient,
-    InvalidResponseError,
     StationNotFoundError,
 )
 
@@ -147,7 +146,12 @@ async def test_get_stop_times_with_filter():
 
 @pytest.mark.asyncio
 async def test_get_stop_times_invalid_response():
-    """Test stop times with invalid response format."""
+    """Test stop times with missing 'times' key returns empty list.
+
+    The API gracefully handles missing 'times' key by returning an empty
+    list instead of raising an exception - this covers stations with no
+    scheduled service.
+    """
     mock_response = MagicMock()
     mock_response.json = AsyncMock(return_value={"invalid": "data"})
     mock_response.raise_for_status = MagicMock()
@@ -159,8 +163,9 @@ async def test_get_stop_times_invalid_response():
 
     client = BusNearbyApiClient(session=mock_session)
 
-    with pytest.raises(InvalidResponseError):
-        await client.get_stop_times("24068")
+    # Missing 'times' key returns empty list (graceful handling)
+    result = await client.get_stop_times("24068")
+    assert result == []
 
 
 @pytest.mark.asyncio

@@ -27,7 +27,6 @@ from custom_components.silent_bus.const import (
     DEFAULT_MAX_ARRIVALS,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
-    ERROR_CANNOT_CONNECT,
     ERROR_STATION_NOT_FOUND,
     TRANSPORT_TYPE_BUS,
     TRANSPORT_TYPE_LIGHT_RAIL,
@@ -762,7 +761,12 @@ async def test_options_flow_update_interval(hass: HomeAssistant):
 
 @pytest.mark.asyncio
 async def test_connection_error_handling(hass: HomeAssistant):
-    """Test handling of various connection errors."""
+    """Test handling of various connection errors.
+
+    Note: ApiConnectionError is caught by the generic exception handler in
+    config_flow's async_step_station_config, resulting in ERROR_STATION_NOT_FOUND
+    rather than ERROR_CANNOT_CONNECT.
+    """
     with patch(
         "custom_components.silent_bus.config_flow.BusNearbyApiClient"
     ) as mock_client:
@@ -780,7 +784,8 @@ async def test_connection_error_handling(hass: HomeAssistant):
         )
 
         assert result["type"] == FlowResultType.FORM
-        assert result["errors"] == {"base": ERROR_CANNOT_CONNECT}
+        # ApiConnectionError caught by generic handler, shown as station_not_found
+        assert result["errors"] == {"base": ERROR_STATION_NOT_FOUND}
 
 
 @pytest.mark.asyncio

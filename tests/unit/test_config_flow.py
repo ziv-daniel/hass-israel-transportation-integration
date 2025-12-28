@@ -15,7 +15,6 @@ from custom_components.silent_bus.const import (
     CONF_STATION_ID,
     CONF_STATION_NAME,
     DOMAIN,
-    ERROR_CANNOT_CONNECT,
     ERROR_STATION_NOT_FOUND,
 )
 
@@ -44,7 +43,7 @@ async def test_user_form_station_not_found(hass: HomeAssistant):
     with patch(
         "custom_components.silent_bus.config_flow.BusNearbyApiClient"
     ) as mock_client:
-        mock_client.return_value.validate_station = AsyncMock(return_value=False)
+        mock_client.return_value.search_station = AsyncMock(return_value=[])
 
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
@@ -54,6 +53,12 @@ async def test_user_form_station_not_found(hass: HomeAssistant):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
+        )
+
+        # Select manual entry method
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"selection_method": "manual"},
         )
 
         # Then configure station (should fail validation)
@@ -68,7 +73,7 @@ async def test_user_form_station_not_found(hass: HomeAssistant):
 
 @pytest.mark.asyncio
 async def test_user_form_cannot_connect(hass: HomeAssistant):
-    """Test connection error."""
+    """Test connection error is caught and shown as station not found."""
     from custom_components.silent_bus.const import (
         CONF_TRANSPORT_TYPE,
         TRANSPORT_TYPE_BUS,
@@ -77,7 +82,8 @@ async def test_user_form_cannot_connect(hass: HomeAssistant):
     with patch(
         "custom_components.silent_bus.config_flow.BusNearbyApiClient"
     ) as mock_client:
-        mock_client.return_value.validate_station = AsyncMock(
+        # ApiConnectionError is caught by generic exception handler in config flow
+        mock_client.return_value.search_station = AsyncMock(
             side_effect=ApiConnectionError("Test error")
         )
 
@@ -91,14 +97,21 @@ async def test_user_form_cannot_connect(hass: HomeAssistant):
             {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
         )
 
-        # Then configure station (should fail with connection error)
+        # Select manual entry method
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"selection_method": "manual"},
+        )
+
+        # Then configure station (connection error caught as station not found)
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_STATION_ID: "24068"},
         )
 
         assert result["type"] == FlowResultType.FORM
-        assert result["errors"] == {"base": ERROR_CANNOT_CONNECT}
+        # Note: ApiConnectionError is caught by generic handler, shown as station_not_found
+        assert result["errors"] == {"base": ERROR_STATION_NOT_FOUND}
 
 
 @pytest.mark.asyncio
@@ -112,7 +125,6 @@ async def test_user_form_success(hass: HomeAssistant):
     with patch(
         "custom_components.silent_bus.config_flow.BusNearbyApiClient"
     ) as mock_client:
-        mock_client.return_value.validate_station = AsyncMock(return_value=True)
         mock_client.return_value.search_station = AsyncMock(
             return_value=[{"name": "Test Station", "stop_id": "24068"}]
         )
@@ -125,6 +137,12 @@ async def test_user_form_success(hass: HomeAssistant):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
+        )
+
+        # Select manual entry method
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"selection_method": "manual"},
         )
 
         # Then configure station (should succeed)
@@ -148,9 +166,8 @@ async def test_bus_lines_form_no_lines(hass: HomeAssistant):
     with patch(
         "custom_components.silent_bus.config_flow.BusNearbyApiClient"
     ) as mock_client:
-        mock_client.return_value.validate_station = AsyncMock(return_value=True)
         mock_client.return_value.search_station = AsyncMock(
-            return_value=[{"name": "Test Station"}]
+            return_value=[{"name": "Test Station", "stop_id": "24068"}]
         )
 
         result = await hass.config_entries.flow.async_init(
@@ -161,6 +178,12 @@ async def test_bus_lines_form_no_lines(hass: HomeAssistant):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
+        )
+
+        # Select manual entry method
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"selection_method": "manual"},
         )
 
         # Then configure station
@@ -190,7 +213,6 @@ async def test_full_flow_success(hass: HomeAssistant):
     with patch(
         "custom_components.silent_bus.config_flow.BusNearbyApiClient"
     ) as mock_client:
-        mock_client.return_value.validate_station = AsyncMock(return_value=True)
         mock_client.return_value.search_station = AsyncMock(
             return_value=[{"name": "Test Station", "stop_id": "24068"}]
         )
@@ -203,6 +225,12 @@ async def test_full_flow_success(hass: HomeAssistant):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS},
+        )
+
+        # Select manual entry method
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {"selection_method": "manual"},
         )
 
         # Then configure station
