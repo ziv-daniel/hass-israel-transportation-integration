@@ -419,20 +419,46 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
 
             if selected_station:
-                self._station_id = station_id
                 self._station_name = selected_station["name"]
 
-                # Validate API response format before proceeding
+                # Validate and resolve actual stop_id via API
+                # GTFS data may use stop_code (shown on signs) instead of stop_id
                 try:
                     async with aiohttp.ClientSession() as session:
                         api_client = BusNearbyApiClient(session)
+
+                        # Try to find the station via API to get correct stop_id
+                        try:
+                            api_stations = await api_client.search_station(station_id)
+                            if api_stations:
+                                # Use stop_id from API result
+                                actual_stop_id = api_stations[0].get(
+                                    "stop_id", api_stations[0].get("id", station_id)
+                                )
+                                _LOGGER.debug(
+                                    "GTFS station lookup: gtfs_id=%s -> stop_id=%s",
+                                    station_id,
+                                    actual_stop_id,
+                                )
+                            else:
+                                # Fallback to GTFS ID if API search fails
+                                actual_stop_id = station_id
+                        except Exception:
+                            actual_stop_id = station_id
+
+                        self._station_id = actual_stop_id
+
+                        # Validate API response format
                         (
                             is_valid,
                             error_msg,
-                        ) = await api_client.validate_station_api_response(station_id)
+                        ) = await api_client.validate_station_api_response(
+                            actual_stop_id
+                        )
                         if not is_valid:
                             _LOGGER.error(
-                                "Station %s failed API validation: %s",
+                                "Station %s (gtfs: %s) failed API validation: %s",
+                                actual_stop_id,
                                 station_id,
                                 error_msg,
                             )
@@ -526,18 +552,32 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         if not stations or len(stations) == 0:
                             errors["base"] = ERROR_STATION_NOT_FOUND
                         else:
-                            # Get station name from search results
-                            self._station_name = stations[0].get(
-                                "name", f"Station {station_id}"
+                            # Get station info from search results
+                            first_station = stations[0]
+                            self._station_name = first_station.get(
+                                "stop_name",
+                                first_station.get("name", f"Station {station_id}"),
                             )
-                            self._station_id = station_id
+                            # CRITICAL: Use stop_id from search result, not user input
+                            # User may enter stop_code (e.g., 12665 on bus stop sign)
+                            # but API stoptimes endpoint requires stop_id (e.g., 44592)
+                            actual_stop_id = first_station.get(
+                                "stop_id", first_station.get("id", station_id)
+                            )
+                            self._station_id = actual_stop_id
+                            _LOGGER.debug(
+                                "Station lookup: user input=%s -> stop_id=%s, name=%s",
+                                station_id,
+                                actual_stop_id,
+                                self._station_name,
+                            )
 
                             # Validate API response format before proceeding
                             (
                                 is_valid,
                                 error_msg,
                             ) = await api_client.validate_station_api_response(
-                                station_id
+                                actual_stop_id
                             )
                             if not is_valid:
                                 _LOGGER.error(
@@ -607,8 +647,41 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             station = next((s for s in stations_list if s["id"] == station_id), None)
 
             if station:
-                self._from_station = station_id
                 self._from_station_name = station["name_en"]
+
+                # Resolve Israel Railways code to BusNearby stop_id by searching
+                # by Hebrew station name (more reliable than using rail codes)
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        api_client = BusNearbyApiClient(session)
+                        # Search by Hebrew name to find BusNearby stop_id
+                        search_results = await api_client.search_station(
+                            station["name_he"]
+                        )
+                        if search_results:
+                            # Use the BusNearby stop_id for API calls
+                            self._from_station = search_results[0].get(
+                                "stop_id", station_id
+                            )
+                            _LOGGER.debug(
+                                "Train FROM station: rail_code=%s -> stop_id=%s (name: %s)",
+                                station_id,
+                                self._from_station,
+                                station["name_he"],
+                            )
+                        else:
+                            # Fallback to rail code if search fails
+                            self._from_station = station_id
+                            _LOGGER.warning(
+                                "Could not resolve BusNearby ID for train station %s (%s)",
+                                station_id,
+                                station["name_he"],
+                            )
+                except Exception as err:
+                    _LOGGER.warning(
+                        "Failed to resolve train station %s: %s", station_id, err
+                    )
+                    self._from_station = station_id
 
                 # Move to TO station selection
                 return await self.async_step_train_select_to()
@@ -662,31 +735,77 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             station = next((s for s in stations_list if s["id"] == station_id), None)
 
             if station:
-                self._to_station = station_id
                 self._to_station_name = station["name_en"]
 
-                # Validate: FROM and TO must be different
-                if self._from_station == self._to_station:
-                    errors["to_station"] = "cannot_be_same"
-                else:
-                    # Create entry for train
-                    await self.async_set_unique_id(
-                        f"{self._from_station}_{self._to_station}"
-                    )
-                    self._abort_if_unique_id_configured()
+                # Resolve Israel Railways code to BusNearby stop_id
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        api_client = BusNearbyApiClient(session)
+                        # Search by Hebrew name to find BusNearby stop_id
+                        search_results = await api_client.search_station(
+                            station["name_he"]
+                        )
+                        if search_results:
+                            self._to_station = search_results[0].get(
+                                "stop_id", station_id
+                            )
+                            _LOGGER.debug(
+                                "Train TO station: rail_code=%s -> stop_id=%s (name: %s)",
+                                station_id,
+                                self._to_station,
+                                station["name_he"],
+                            )
+                        else:
+                            self._to_station = station_id
+                            _LOGGER.warning(
+                                "Could not resolve BusNearby ID for train station %s (%s)",
+                                station_id,
+                                station["name_he"],
+                            )
 
-                    return self.async_create_entry(
-                        title=f"{self._from_station_name} → {self._to_station_name}",
-                        data={
-                            CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN,
-                            CONF_FROM_STATION: self._from_station,
-                            CONF_TO_STATION: self._to_station,
-                            CONF_FROM_STATION_NAME: self._from_station_name,
-                            CONF_TO_STATION_NAME: self._to_station_name,
-                            CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
-                            CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
-                        },
-                    )
+                        # Validate: FROM and TO must be different
+                        if self._from_station == self._to_station:
+                            errors["to_station"] = "cannot_be_same"
+                        else:
+                            # Validate train route API response before creating entry
+                            (
+                                is_valid,
+                                error_msg,
+                            ) = await api_client.validate_train_route_api_response(
+                                self._from_station, self._to_station
+                            )
+                            if not is_valid:
+                                _LOGGER.error(
+                                    "Train route %s -> %s failed validation: %s",
+                                    self._from_station,
+                                    self._to_station,
+                                    error_msg,
+                                )
+                                errors["base"] = ERROR_INVALID_STATION_RESPONSE
+                            else:
+                                # Create entry for train
+                                await self.async_set_unique_id(
+                                    f"{self._from_station}_{self._to_station}"
+                                )
+                                self._abort_if_unique_id_configured()
+
+                                return self.async_create_entry(
+                                    title=f"{self._from_station_name} → {self._to_station_name}",
+                                    data={
+                                        CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN,
+                                        CONF_FROM_STATION: self._from_station,
+                                        CONF_TO_STATION: self._to_station,
+                                        CONF_FROM_STATION_NAME: self._from_station_name,
+                                        CONF_TO_STATION_NAME: self._to_station_name,
+                                        CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
+                                        CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
+                                    },
+                                )
+                except ApiConnectionError:
+                    errors["base"] = ERROR_CANNOT_CONNECT
+                except Exception as err:
+                    _LOGGER.exception("Failed to validate train route: %s", err)
+                    errors["base"] = ERROR_UNKNOWN
 
         # Get train stations list (exclude the FROM station)
         stations_list = get_train_stations_list()
