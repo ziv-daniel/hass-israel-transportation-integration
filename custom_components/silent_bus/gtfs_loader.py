@@ -4,6 +4,7 @@ This module loads the pre-processed GTFS cities index and provides
 functions to access station data for the config flow.
 """
 
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -63,6 +64,29 @@ def load_cities_index() -> Dict:
     )
 
     return _CITIES_INDEX_CACHE
+
+
+async def async_load_cities_index() -> Dict:
+    """Load the cities index asynchronously (non-blocking).
+
+    This runs the file I/O in a thread pool to avoid blocking the event loop.
+    Should be called once during config flow setup to pre-load the cache.
+
+    Returns:
+        Dictionary mapping city names to station data
+
+    Raises:
+        FileNotFoundError: If cities_index.json doesn't exist
+        json.JSONDecodeError: If JSON is malformed
+    """
+    global _CITIES_INDEX_CACHE
+
+    # Return cached data if available (no I/O needed)
+    if _CITIES_INDEX_CACHE is not None:
+        return _CITIES_INDEX_CACHE
+
+    # Run the blocking I/O in a thread pool
+    return await asyncio.to_thread(load_cities_index)
 
 
 def get_cities_list(

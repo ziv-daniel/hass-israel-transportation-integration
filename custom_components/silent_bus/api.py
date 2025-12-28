@@ -142,6 +142,69 @@ class BusNearbyApiClient:
         except Exception as err:
             raise InvalidResponseError(f"Invalid response from API: {err}") from err
 
+    def _normalize_pattern_response(
+        self, data: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Normalize pattern-based API response to standard format.
+
+        The API sometimes returns data in a pattern-based format:
+        [{"pattern": {"route": {...}}, "stoptimes": [...]}, ...]
+
+        This normalizes it to the expected format:
+        [{"routeShortName": "249", "serviceDay": ..., "realtimeArrival": ...}, ...]
+
+        Args:
+            data: List of pattern objects from API
+
+        Returns:
+            List of normalized arrival dictionaries
+        """
+        normalized: list[dict[str, Any]] = []
+
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+
+            # Extract route info from pattern
+            pattern = item.get("pattern", {})
+            route = pattern.get("route", {})
+            route_short_name = route.get("shortName", "")
+
+            # Get stoptimes from the item
+            stoptimes = item.get("stoptimes", [])
+            if not stoptimes and "times" in item:
+                stoptimes = item.get("times", [])
+
+            # If no stoptimes found, try to extract from item directly
+            # (sometimes the item itself contains the arrival info)
+            if not stoptimes:
+                # Check if item has arrival time fields directly
+                if "realtimeArrival" in item or "scheduledArrival" in item:
+                    stoptimes = [item]
+
+            for stoptime in stoptimes:
+                if not isinstance(stoptime, dict):
+                    continue
+
+                arrival_entry = {
+                    "routeShortName": route_short_name
+                    or stoptime.get("routeShortName", ""),
+                    "serviceDay": stoptime.get("serviceDay", 0),
+                    "realtimeArrival": stoptime.get("realtimeArrival", 0),
+                    "scheduledArrival": stoptime.get("scheduledArrival", 0),
+                    "realtime": stoptime.get("realtime", False),
+                    "headsign": stoptime.get("headsign", "")
+                    or stoptime.get("tripHeadsign", "")
+                    or pattern.get("headsign", ""),
+                }
+
+                # Only add if we have a valid route name
+                if arrival_entry["routeShortName"]:
+                    normalized.append(arrival_entry)
+
+        _LOGGER.debug("Normalized %d arrivals from pattern response", len(normalized))
+        return normalized
+
     async def search_station(
         self, query: str, locale: str = "he"
     ) -> list[dict[str, Any]]:
@@ -238,31 +301,40 @@ class BusNearbyApiClient:
         try:
             data = await self._make_request(url, params)
 
-            if not isinstance(data, dict):
+            # Handle both response formats:
+            # 1. Dictionary with "times" key: {"times": [...]}
+            # 2. Direct list of pattern/stoptimes: [{pattern: {...}, stoptimes: [...]}, ...]
+            if isinstance(data, list):
+                # API returned pattern-based list format
+                _LOGGER.debug(
+                    "Station %s returned direct list format with %d items",
+                    stop_id,
+                    len(data),
+                )
+                arrivals = self._normalize_pattern_response(data)
+            elif isinstance(data, dict):
+                # API returned dictionary format
+                if "times" not in data:
+                    _LOGGER.debug(
+                        "Station %s has no scheduled times (no service or no routes)",
+                        stop_id,
+                    )
+                    return []
+                arrivals = data["times"]
+                if not isinstance(arrivals, list):
+                    raise InvalidResponseError(
+                        "Invalid response format: 'times' is not a list"
+                    )
+            else:
                 response_preview = str(data)[:200] if data else "empty/null"
                 _LOGGER.error(
-                    "Invalid API response for station %s: expected dict, got %s. Response: %s",
+                    "Invalid API response for station %s: expected dict or list, got %s. Response: %s",
                     stop_id,
                     type(data).__name__,
                     response_preview,
                 )
                 raise InvalidResponseError(
-                    f"Invalid response format: expected dictionary, got {type(data).__name__}"
-                )
-
-            # Handle missing 'times' key gracefully - station may have no scheduled service
-            if "times" not in data:
-                _LOGGER.debug(
-                    "Station %s has no scheduled times (no service or no routes)",
-                    stop_id,
-                )
-                return []
-
-            arrivals = data["times"]
-
-            if not isinstance(arrivals, list):
-                raise InvalidResponseError(
-                    "Invalid response format: 'times' is not a list"
+                    f"Invalid response format: expected dictionary or list, got {type(data).__name__}"
                 )
 
             # Filter by bus lines if specified

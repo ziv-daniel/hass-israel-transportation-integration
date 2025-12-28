@@ -25,6 +25,7 @@ from homeassistant.helpers.selector import (
 )
 
 from .gtfs_loader import (
+    async_load_cities_index,
     get_all_cities_list,
     get_cities_list,
     get_cities_near_location,
@@ -131,6 +132,12 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         Returns:
             Flow result
         """
+        # Pre-load GTFS data asynchronously to avoid blocking I/O warnings
+        try:
+            await async_load_cities_index()
+        except FileNotFoundError:
+            pass  # Will be handled by is_gtfs_data_available() check below
+
         if user_input is not None:
             selection_method = user_input["selection_method"]
 
@@ -415,8 +422,28 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._station_id = station_id
                 self._station_name = selected_station["name"]
 
-                # Move to bus lines selection
-                return await self.async_step_bus_lines()
+                # Validate API response format before proceeding
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        api_client = BusNearbyApiClient(session)
+                        is_valid, error_msg = (
+                            await api_client.validate_station_api_response(station_id)
+                        )
+                        if not is_valid:
+                            _LOGGER.error(
+                                "Station %s failed API validation: %s",
+                                station_id,
+                                error_msg,
+                            )
+                            errors["base"] = ERROR_INVALID_STATION_RESPONSE
+                        else:
+                            # Move to bus lines selection
+                            return await self.async_step_bus_lines()
+                except ApiConnectionError:
+                    errors["base"] = ERROR_CANNOT_CONNECT
+                except Exception:  # pylint: disable=broad-except
+                    _LOGGER.exception("Unexpected exception during API validation")
+                    errors["base"] = ERROR_UNKNOWN
             else:
                 errors["base"] = ERROR_STATION_NOT_FOUND
 
