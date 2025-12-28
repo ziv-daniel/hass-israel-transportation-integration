@@ -22,4 +22,4 @@ repos:
     hooks:
       - id: codespell
         args:
-          - --ignore-words-list=hass,HA
+          - --ignore-words-list=hass,HA,lod,mot
