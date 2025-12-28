@@ -11,12 +11,14 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import (
     ApiConnectionError,
     BusNearbyApiClient,
     InvalidResponseError,
 )
+from .gov_api import GovApiClient, ApiConnectionError as GovApiConnectionError
 from homeassistant.helpers.selector import (
     SelectOptionDict,
     SelectSelector,
@@ -541,81 +543,34 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             station_id = user_input[CONF_STATION_ID].strip()
 
-            # Validate and get station info in one call (Phase 1 fix)
+            # Validate station directly with gov API (no translation needed)
             try:
-                async with aiohttp.ClientSession() as session:
-                    api_client = BusNearbyApiClient(session)
+                async with GovApiClient(
+                    async_get_clientsession(self.hass)
+                ) as gov_client:
+                    # Validate station directly with gov API
+                    station_info = await gov_client.get_station(station_id)
 
-                    # Validate and get station name using search endpoint
-                    try:
-                        stations = await api_client.search_station(station_id)
-                        _LOGGER.info(
-                            "Search API response for '%s': %s",
-                            station_id,
-                            stations[:3] if stations else "empty",
-                        )
-                        if not stations or len(stations) == 0:
-                            errors["base"] = ERROR_STATION_NOT_FOUND
-                        else:
-                            # Get station info from search results
-                            first_station = stations[0]
-                            _LOGGER.info(
-                                "First station raw data: %s",
-                                first_station,
-                            )
-                            self._station_name = first_station.get(
-                                "stop_name",
-                                first_station.get("name", f"Station {station_id}"),
-                            )
-                            # CRITICAL: Use stop_id from search result, not user input
-                            # User may enter stop_code (e.g., 12665 on bus stop sign)
-                            # but API stoptimes endpoint requires stop_id (e.g., 44592)
-                            actual_stop_id = first_station.get(
-                                "stop_id", first_station.get("id", station_id)
-                            )
-                            self._station_id = actual_stop_id
-                            _LOGGER.info(
-                                "Station lookup: user input=%s -> actual_stop_id=%s, name=%s",
-                                station_id,
-                                actual_stop_id,
-                                self._station_name,
-                            )
-
-                            # Validate API response format before proceeding
-                            _LOGGER.info(
-                                "Calling validate_station_api_response with stop_id=%s",
-                                actual_stop_id,
-                            )
-                            (
-                                is_valid,
-                                error_msg,
-                            ) = await api_client.validate_station_api_response(
-                                actual_stop_id
-                            )
-                            if not is_valid:
-                                _LOGGER.error(
-                                    "Station %s failed API validation: %s",
-                                    station_id,
-                                    error_msg,
-                                )
-                                errors["base"] = ERROR_INVALID_STATION_RESPONSE
-                            else:
-                                # Move to next step
-                                return await self.async_step_bus_lines()
-                    except InvalidResponseError as err:
-                        _LOGGER.error(
-                            "Station %s has invalid API response: %s",
-                            station_id,
-                            err,
-                        )
-                        errors["base"] = ERROR_INVALID_STATION_RESPONSE
-                    except Exception:
+                    if station_info.get("Name") is None or station_info.get("Makat", 0) == 0:
                         errors["base"] = ERROR_STATION_NOT_FOUND
+                    else:
+                        # Station is valid - use Makat directly
+                        self._station_id = station_id
+                        self._station_name = station_info.get("Name", f"Station {station_id}")
 
-            except ApiConnectionError:
+                        _LOGGER.info(
+                            "Station validated: makat=%s, name=%s",
+                            self._station_id,
+                            self._station_name,
+                        )
+
+                        # Move to next step
+                        return await self.async_step_bus_lines()
+
+            except GovApiConnectionError:
                 errors["base"] = ERROR_CANNOT_CONNECT
             except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception")
+                _LOGGER.exception("Unexpected exception during station validation")
                 errors["base"] = ERROR_UNKNOWN
 
         # Show form
