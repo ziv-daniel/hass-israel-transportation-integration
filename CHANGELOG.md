@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] - 2025-12-28
+
+### Fixed
+- **Train Station Dropdown**: Added dropdown selection for train stations (70+ Israeli Railways stations)
+  - Users can now browse and select FROM/TO stations from a list
+  - Bilingual display (English / Hebrew) for all train stations
+  - Manual entry still available as fallback option
+  - Validation prevents selecting same station for FROM and TO
+
+- **City Extraction Improvements**: Better categorization of bus stations by city
+  - Expanded city mappings from 25 to 100+ Israeli cities
+  - Improved extraction logic with word-boundary matching
+  - Prevents false matches (e.g., "שדרות" boulevard vs Sderot city)
+  - Reduced "Other" category from 95% to 92% of stations
+  - Now properly identifies 87 cities including all major urban areas
+
+- **Bilingual City Names**: Added Hebrew translations to city dropdown
+  - Cities now display as "English / עברית (station count)"
+  - Example: "Tel Aviv / תל אביב (157 stations)"
+  - Improves accessibility for Hebrew-speaking users
+
+- **API Error Handling**: Fixed "missing 'times' key" error
+  - Stations without scheduled service now handled gracefully
+  - Returns empty arrival list instead of crashing
+  - Better logging for debugging stations with no service
+
+- **UI Branding Consistency**: Fixed integration display name
+  - Updated hacs.json from "Silent Bus" to "Israel Transportation"
+  - Ensures HACS shows correct integration name
+  - Aligns with rebranding from v1.3.0
+
+### Technical
+- Added `scripts/israeli_cities.py` with comprehensive city mappings (100+ cities)
+- Added `custom_components/silent_bus/train_stations.py` with major train stations
+- Enhanced `extract_city_from_name()` with 5 pattern-matching strategies
+- Updated `get_cities_list()` to display bilingual names
+- Improved error handling in `get_stop_times()` API method
+- GTFS data regenerated with Hebrew city names populated
+
 ## [1.3.2] - 2025-12-28
 
 ### Fixed

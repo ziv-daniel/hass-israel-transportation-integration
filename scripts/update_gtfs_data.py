@@ -23,56 +23,30 @@ except ImportError:
     print("Error: aiohttp not installed. Run: pip install aiohttp")
     sys.exit(1)
 
+# Import comprehensive city mappings
+try:
+    from israeli_cities import get_all_city_mappings, get_hebrew_name
+    CITY_MAPPINGS = get_all_city_mappings()
+except ImportError:
+    # Fallback to basic mappings if israeli_cities.py not found
+    CITY_MAPPINGS = {
+        "תל אביב": "Tel Aviv",
+        "ירושלים": "Jerusalem",
+        "חיפה": "Haifa",
+        "באר שבע": "Be'er Sheva",
+    }
+
+    def get_hebrew_name(english_city: str) -> str:
+        """Fallback function if israeli_cities.py not found."""
+        for he_city, en_city in CITY_MAPPINGS.items():
+            if en_city == english_city:
+                return he_city
+        return ""
+
 # Configuration
 GTFS_URL = "https://gtfs.mot.gov.il/gtfsfiles/israel-public-transportation.zip"
 OUTPUT_DIR = Path("custom_components/silent_bus/gtfs_data")
 CITIES_INDEX_FILE = "cities_index.json"
-
-
-# City name mappings (Hebrew to English)
-CITY_MAPPINGS = {
-    # Major cities
-    "תל אביב": "Tel Aviv",
-    "תל-אביב": "Tel Aviv",
-    "ירושלים": "Jerusalem",
-    "חיפה": "Haifa",
-    "באר שבע": "Be'er Sheva",
-    "באר-שבע": "Be'er Sheva",
-    "ראשון לציון": "Rishon LeZion",
-    "פתח תקווה": "Petah Tikva",
-    "פתח-תקווה": "Petah Tikva",
-    "אשדוד": "Ashdod",
-    "נתניה": "Netanya",
-    "בני ברק": "Bnei Brak",
-    "בני-ברק": "Bnei Brak",
-    "חולון": "Holon",
-    "רמת גן": "Ramat Gan",
-    "רמת-גן": "Ramat Gan",
-    "אשקלון": "Ashkelon",
-    "רחובות": "Rehovot",
-    "בת ים": "Bat Yam",
-    "בת-ים": "Bat Yam",
-    "הרצליה": "Herzliya",
-    "כפר סבא": "Kfar Saba",
-    "כפר-סבא": "Kfar Saba",
-    "חדרה": "Hadera",
-    "מודיעין": "Modi'in",
-    "לוד": "Lod",
-    "רמלה": "Ramla",
-    "נצרת": "Nazareth",
-    "עכו": "Acre",
-    "אילת": "Eilat",
-    "טבריה": "Tiberias",
-    "צפת": "Safed",
-    # Neighborhoods/Areas
-    "יפו": "Jaffa",
-    "רמת אביב": "Ramat Aviv",
-    "גבעתיים": "Givatayim",
-    "קריית אונו": "Kiryat Ono",
-    "רעננה": "Ra'anana",
-    "הוד השרון": "Hod HaSharon",
-    "רמת השרון": "Ramat HaSharon",
-}
 
 
 def extract_city_from_name(stop_name: str) -> str:
@@ -98,28 +72,81 @@ def extract_city_from_name(stop_name: str) -> str:
     # Remove extra whitespace
     stop_name = " ".join(stop_name.split())
 
-    # Try to match against known cities (Hebrew and English)
-    for he_city, en_city in CITY_MAPPINGS.items():
-        if he_city in stop_name or en_city in stop_name:
-            return en_city
+    # Words to exclude from city matching (common words that aren't city names)
+    # "שדרות" = boulevard/avenue (also a city name, but more commonly a street type)
+    EXCLUDE_WORDS = {"שדרות", "רחוב", "דרך", "כביש", "מרכז", "תחנה"}
 
-    # Pattern 1: "Something - City" (Hebrew)
-    match = re.search(r'-\s*([א-ת\s\-]+)$', stop_name)
+    # Strategy 1: Try pattern-based extraction first (most reliable)
+    # These patterns extract cities from structured formats like "Station - City"
+
+    # Pattern 1: "Something - City" (after dash, before end or slash)
+    # Matches Hebrew: "רחוב ראשי - תל אביב" → "תל אביב"
+    # Matches English: "Main Street - Jerusalem" → "Jerusalem"
+    match = re.search(r'[-–]\s*([א-ת][א-ת\s\-\']+?)(?:\s*$)', stop_name)
     if match:
         city_candidate = match.group(1).strip()
-        # Check if it's a known city
+        if city_candidate not in EXCLUDE_WORDS and city_candidate in CITY_MAPPINGS:
+            return CITY_MAPPINGS[city_candidate]
+
+    # English variant
+    match = re.search(r'[-–]\s*([A-Z][a-zA-Z\s\']+?)(?:\s*$)', stop_name)
+    if match:
+        city_candidate = match.group(1).strip()
+        if city_candidate in CITY_MAPPINGS:
+            return CITY_MAPPINGS[city_candidate]
+        # Check against English city names
+        for he_city, en_city in CITY_MAPPINGS.items():
+            if city_candidate.lower() == en_city.lower():
+                return en_city
+
+    # Pattern 2: "City - Something" (at beginning, before dash)
+    # Matches: "תל אביב - רחוב דיזנגוף" → "תל אביב"
+    match = re.search(r'^([א-ת][א-ת\s\-\']+?)\s*[-–]', stop_name)
+    if match:
+        city_candidate = match.group(1).strip()
+        if city_candidate not in EXCLUDE_WORDS and city_candidate in CITY_MAPPINGS:
+            return CITY_MAPPINGS[city_candidate]
+
+    # English variant
+    match = re.search(r'^([A-Z][a-zA-Z\s\']+?)\s*[-–]', stop_name)
+    if match:
+        city_candidate = match.group(1).strip()
         if city_candidate in CITY_MAPPINGS:
             return CITY_MAPPINGS[city_candidate]
 
-    # Pattern 2: "Something - City" (English)
-    match = re.search(r'-\s*([A-Z][a-z\s]+)$', stop_name)
-    if match:
-        return match.group(1).strip()
+    # Pattern 3: "City / Something" or "Something / City" (with slashes)
+    # Matches: "תל אביב/מרכז" → "תל אביב"
+    for part in stop_name.split('/'):
+        part = part.strip()
+        if part in CITY_MAPPINGS and part not in EXCLUDE_WORDS:
+            return CITY_MAPPINGS[part]
+        # Check for English cities
+        for he_city, en_city in CITY_MAPPINGS.items():
+            if part.lower() == en_city.lower():
+                return en_city
 
-    # Pattern 3: "Something / City"
-    match = re.search(r'/\s*([A-Z][a-z\s]+)$', stop_name)
-    if match:
-        return match.group(1).strip()
+    # Strategy 2: Substring matching with word boundaries (more lenient, last resort)
+    # Look for city names that appear as complete words, not substrings
+    # This prevents "שדרות" (boulevard) from matching "Sderot"
+
+    # Build a list of cities that appear as complete words (with word boundaries)
+    matched_cities = []
+    for he_city, en_city in CITY_MAPPINGS.items():
+        # Skip common words that aren't actually cities in this context
+        if he_city in EXCLUDE_WORDS:
+            continue
+
+        # Use word boundary matching - city must be surrounded by spaces, dashes, or string boundaries
+        # This prevents "שדרות" in "שדרות ירושלים" from matching
+        pattern = r'(?:^|\s|[-–/])' + re.escape(he_city) + r'(?:$|\s|[-–/])'
+        if re.search(pattern, stop_name):
+            matched_cities.append((len(he_city), en_city))
+
+    if matched_cities:
+        # Return the longest match (most specific)
+        # E.g., "תל אביב יפו" beats "תל אביב"
+        matched_cities.sort(reverse=True)
+        return matched_cities[0][1]
 
     # Default: categorize as "Other"
     return "Other"
@@ -235,7 +262,7 @@ def parse_stops(zip_path: Path) -> Dict[str, Dict]:
                 if city not in cities_index:
                     cities_index[city] = {
                         'name': city,
-                        'name_he': '',  # Could be populated from translations.txt
+                        'name_he': get_hebrew_name(city),  # Populate Hebrew name
                         'stations': []
                     }
 

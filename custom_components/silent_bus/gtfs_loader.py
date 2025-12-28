@@ -73,8 +73,8 @@ def get_cities_list() -> List[Dict[str, str]]:
 
     Example:
         [
-            {'id': 'Jerusalem', 'name': 'Jerusalem (464 stations)'},
-            {'id': 'Tel Aviv', 'name': 'Tel Aviv (157 stations)'},
+            {'id': 'Jerusalem', 'name': 'Jerusalem / ירושלים (464 stations)'},
+            {'id': 'Tel Aviv', 'name': 'Tel Aviv / תל אביב (157 stations)'},
             ...
         ]
     """
@@ -92,9 +92,16 @@ def get_cities_list() -> List[Dict[str, str]]:
         if city_id == "Other":
             continue
 
+        # Build bilingual city name if Hebrew name is available
+        city_name_he = city_data.get('name_he', '')
+        if city_name_he:
+            display_name = f"{city_id} / {city_name_he} ({station_count} stations)"
+        else:
+            display_name = f"{city_id} ({station_count} stations)"
+
         cities.append({
             'id': city_id,
-            'name': f"{city_id} ({station_count} stations)"
+            'name': display_name
         })
 
     # Sort alphabetically by city name

@@ -238,10 +238,18 @@ class BusNearbyApiClient:
         try:
             data = await self._make_request(url, params)
 
-            if not isinstance(data, dict) or "times" not in data:
+            if not isinstance(data, dict):
                 raise InvalidResponseError(
-                    "Invalid response format: missing 'times' key"
+                    "Invalid response format: expected dictionary"
                 )
+
+            # Handle missing 'times' key gracefully - station may have no scheduled service
+            if "times" not in data:
+                _LOGGER.debug(
+                    "Station %s has no scheduled times (no service or no routes)",
+                    stop_id
+                )
+                return []
 
             arrivals = data["times"]
 
