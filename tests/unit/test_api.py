@@ -191,7 +191,15 @@ async def test_api_connection_error():
 async def test_validate_station_success():
     """Test successful station validation."""
     mock_response = MagicMock()
-    mock_response.json = AsyncMock(return_value={"times": []})
+    mock_response.json = AsyncMock(
+        return_value=[
+            {
+                "stop_id": "24068",
+                "name": "Arlozorov Terminal",
+                "city": "Tel Aviv",
+            }
+        ]
+    )
     mock_response.raise_for_status = MagicMock()
 
     mock_session = MagicMock(spec=aiohttp.ClientSession)
@@ -208,8 +216,14 @@ async def test_validate_station_success():
 @pytest.mark.asyncio
 async def test_validate_station_failure():
     """Test failed station validation."""
+    mock_response = MagicMock()
+    mock_response.json = AsyncMock(return_value=[])
+    mock_response.raise_for_status = MagicMock()
+
     mock_session = MagicMock(spec=aiohttp.ClientSession)
-    mock_session.get = MagicMock(side_effect=aiohttp.ClientError())
+    mock_session.get = MagicMock(
+        return_value=AsyncMock(__aenter__=AsyncMock(return_value=mock_response))
+    )
 
     client = BusNearbyApiClient(session=mock_session)
     result = await client.validate_station("99999")

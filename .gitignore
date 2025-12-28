@@ -71,3 +71,16 @@ home-assistant_v2.db
 *.tmp
 *.bak
 *.log
+
+# Screenshots and temporary images
+*.png
+!custom_components/**/*.png
+
+# Claude temporary files
+.claude/*.png
+.claude/*.txt
+.claude/snapshot*.txt
+.claude/screenshot*.png
+.claude/workflow*.png
+.claude/pr-screenshot.png
+nul

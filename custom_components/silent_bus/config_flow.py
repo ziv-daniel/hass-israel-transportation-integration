@@ -16,6 +16,11 @@ from .api import (
     ApiConnectionError,
     BusNearbyApiClient,
 )
+from .gtfs_loader import (
+    get_cities_list,
+    get_stations_for_city,
+    is_gtfs_data_available,
+)
 from .const import (
     CONF_BUS_LINES,
     CONF_FROM_STATION,
@@ -58,6 +63,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._to_station: str | None = None
         self._from_station_name: str | None = None
         self._to_station_name: str | None = None
+        self._selected_city: str | None = None
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -77,8 +83,8 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if self._transport_type == TRANSPORT_TYPE_TRAIN:
                 return await self.async_step_train_config()
             else:
-                # For bus and light rail, use station-based configuration
-                return await self.async_step_station_config()
+                # For bus and light rail, ask how they want to select station
+                return await self.async_step_station_selection_method()
 
         # Show transport type selection
         data_schema = vol.Schema(
@@ -105,6 +111,171 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
+    async def async_step_station_selection_method(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle station selection method choice.
+
+        Args:
+            user_input: User input data
+
+        Returns:
+            Flow result
+        """
+        if user_input is not None:
+            selection_method = user_input["selection_method"]
+
+            if selection_method == "city_dropdown":
+                return await self.async_step_select_city()
+            else:
+                return await self.async_step_station_config()
+
+        # Check if GTFS data is available
+        gtfs_available = is_gtfs_data_available()
+
+        # Build selection options
+        if gtfs_available:
+            options = {
+                "city_dropdown": "Browse stations by city (recommended)",
+                "manual": "Enter station ID manually",
+            }
+            default_method = "city_dropdown"
+        else:
+            # GTFS data not available, only offer manual entry
+            options = {
+                "manual": "Enter station ID manually",
+            }
+            default_method = "manual"
+
+        data_schema = vol.Schema({
+            vol.Required("selection_method", default=default_method): vol.In(options),
+        })
+
+        return self.async_show_form(
+            step_id="station_selection_method",
+            data_schema=data_schema,
+            description_placeholders={
+                "transport_type": TRANSPORT_TYPE_LABELS.get(
+                    self._transport_type, "transportation"
+                ).lower(),
+            },
+        )
+
+    async def async_step_select_city(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle city selection from GTFS data.
+
+        Args:
+            user_input: User input data
+
+        Returns:
+            Flow result
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            city_id = user_input["city_id"]
+
+            # Handle manual entry fallback
+            if city_id == "manual":
+                return await self.async_step_station_config()
+
+            # Save selected city and move to station selection
+            self._selected_city = city_id
+            return await self.async_step_select_station()
+
+        # Get cities from GTFS data
+        cities = get_cities_list()
+
+        if not cities:
+            # No GTFS data available, fall back to manual entry
+            return await self.async_step_station_config()
+
+        # Build city options dictionary
+        city_options = {city['id']: city['name'] for city in cities}
+
+        # Add manual entry fallback option
+        city_options["manual"] = "🔍 Enter station ID manually..."
+
+        data_schema = vol.Schema({
+            vol.Required("city_id"): vol.In(city_options),
+        })
+
+        return self.async_show_form(
+            step_id="select_city",
+            data_schema=data_schema,
+            errors=errors,
+            description_placeholders={
+                "transport_type": TRANSPORT_TYPE_LABELS.get(
+                    self._transport_type, "transportation"
+                ).lower(),
+            },
+        )
+
+    async def async_step_select_station(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle station selection from chosen city.
+
+        Args:
+            user_input: User input data
+
+        Returns:
+            Flow result
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            station_id = user_input["station_id"]
+
+            # Handle manual entry fallback
+            if station_id == "manual":
+                return await self.async_step_station_config()
+
+            # Get station details from GTFS data
+            stations = get_stations_for_city(self._selected_city)
+            selected_station = next((s for s in stations if s['id'] == station_id), None)
+
+            if selected_station:
+                self._station_id = station_id
+                self._station_name = selected_station['name']
+
+                # Move to bus lines selection
+                return await self.async_step_bus_lines()
+            else:
+                errors["base"] = ERROR_STATION_NOT_FOUND
+
+        # Get stations for selected city
+        stations = get_stations_for_city(self._selected_city or "Other")
+
+        if not stations:
+            # No stations found, fall back to manual entry
+            return await self.async_step_station_config()
+
+        # Build station options (limit to reasonable number for UI)
+        # Sort by name and take first 100 stations
+        sorted_stations = sorted(stations, key=lambda s: s['name'])[:100]
+
+        station_options = {s['id']: s['name'] for s in sorted_stations}
+
+        # Add manual entry fallback
+        station_options["manual"] = "🔍 Enter station ID manually..."
+
+        data_schema = vol.Schema({
+            vol.Required("station_id"): vol.In(station_options),
+        })
+
+        return self.async_show_form(
+            step_id="select_station",
+            data_schema=data_schema,
+            errors=errors,
+            description_placeholders={
+                "city_name": self._selected_city or "Unknown",
+                "station_count": str(len(stations)),
+            },
+        )
+
     async def async_step_station_config(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -121,33 +292,27 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             station_id = user_input[CONF_STATION_ID].strip()
 
-            # Validate station ID
+            # Validate and get station info in one call (Phase 1 fix)
             try:
                 async with aiohttp.ClientSession() as session:
                     api_client = BusNearbyApiClient(session)
 
-                    # Try to validate the station
-                    is_valid = await api_client.validate_station(station_id)
+                    # Validate and get station name using search endpoint
+                    try:
+                        stations = await api_client.search_station(station_id)
+                        if not stations or len(stations) == 0:
+                            errors["base"] = ERROR_STATION_NOT_FOUND
+                        else:
+                            # Get station name from search results
+                            self._station_name = stations[0].get(
+                                "name", f"Station {station_id}"
+                            )
+                            self._station_id = station_id
 
-                    if not is_valid:
+                            # Move to next step
+                            return await self.async_step_bus_lines()
+                    except Exception:
                         errors["base"] = ERROR_STATION_NOT_FOUND
-                    else:
-                        # Try to get station name
-                        try:
-                            stations = await api_client.search_station(station_id)
-                            if stations:
-                                self._station_name = stations[0].get(
-                                    "name", f"Station {station_id}"
-                                )
-                            else:
-                                self._station_name = f"Station {station_id}"
-                        except Exception:
-                            self._station_name = f"Station {station_id}"
-
-                        self._station_id = station_id
-
-                        # Move to next step
-                        return await self.async_step_bus_lines()
 
             except ApiConnectionError:
                 errors["base"] = ERROR_CANNOT_CONNECT
@@ -191,62 +356,47 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             from_station = user_input[CONF_FROM_STATION].strip()
             to_station = user_input[CONF_TO_STATION].strip()
 
-            # Validate stations
+            # Validate and get station info in one call per station (Phase 1 fix)
             try:
                 async with aiohttp.ClientSession() as session:
                     api_client = BusNearbyApiClient(session)
 
-                    # Validate both stations
-                    from_valid = await api_client.validate_station(from_station)
-                    to_valid = await api_client.validate_station(to_station)
+                    # Validate and get station names using search endpoint
+                    try:
+                        from_stations = await api_client.search_station(from_station)
+                        to_stations = await api_client.search_station(to_station)
 
-                    if not from_valid or not to_valid:
-                        errors["base"] = ERROR_STATION_NOT_FOUND
-                    else:
-                        # Get station names
-                        try:
-                            from_stations = await api_client.search_station(
-                                from_station
+                        if not from_stations or not to_stations:
+                            errors["base"] = ERROR_STATION_NOT_FOUND
+                        else:
+                            # Get station names from search results
+                            self._from_station_name = from_stations[0].get(
+                                "name", f"Station {from_station}"
                             )
-                            if from_stations:
-                                self._from_station_name = from_stations[0].get(
-                                    "name", f"Station {from_station}"
-                                )
-                            else:
-                                self._from_station_name = f"Station {from_station}"
-                        except Exception:
-                            self._from_station_name = f"Station {from_station}"
+                            self._to_station_name = to_stations[0].get(
+                                "name", f"Station {to_station}"
+                            )
+                            self._from_station = from_station
+                            self._to_station = to_station
 
-                        try:
-                            to_stations = await api_client.search_station(to_station)
-                            if to_stations:
-                                self._to_station_name = to_stations[0].get(
-                                    "name", f"Station {to_station}"
-                                )
-                            else:
-                                self._to_station_name = f"Station {to_station}"
-                        except Exception:
-                            self._to_station_name = f"Station {to_station}"
+                            # Create entry for train
+                            await self.async_set_unique_id(f"{from_station}_{to_station}")
+                            self._abort_if_unique_id_configured()
 
-                        self._from_station = from_station
-                        self._to_station = to_station
-
-                        # Create entry for train
-                        await self.async_set_unique_id(f"{from_station}_{to_station}")
-                        self._abort_if_unique_id_configured()
-
-                        return self.async_create_entry(
-                            title=f"{self._from_station_name} → {self._to_station_name}",
-                            data={
-                                CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN,
-                                CONF_FROM_STATION: self._from_station,
-                                CONF_TO_STATION: self._to_station,
-                                CONF_FROM_STATION_NAME: self._from_station_name,
-                                CONF_TO_STATION_NAME: self._to_station_name,
-                                CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
-                                CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
-                            },
-                        )
+                            return self.async_create_entry(
+                                title=f"{self._from_station_name} → {self._to_station_name}",
+                                data={
+                                    CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN,
+                                    CONF_FROM_STATION: self._from_station,
+                                    CONF_TO_STATION: self._to_station,
+                                    CONF_FROM_STATION_NAME: self._from_station_name,
+                                    CONF_TO_STATION_NAME: self._to_station_name,
+                                    CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
+                                    CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
+                                },
+                            )
+                    except Exception:
+                        errors["base"] = ERROR_STATION_NOT_FOUND
 
             except ApiConnectionError:
                 errors["base"] = ERROR_CANNOT_CONNECT
