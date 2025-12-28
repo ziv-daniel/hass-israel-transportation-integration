@@ -17,7 +17,14 @@
       },
       "select_city": {
         "title": "Select City",
-        "description": "Choose a city to see available {transport_type} stations",
+        "description": "Nearby cities are shown first based on your home location. Top cities by size are highlighted.",
+        "data": {
+          "city_id": "City"
+        }
+      },
+      "select_city_all": {
+        "title": "All Cities",
+        "description": "Browse all available cities sorted alphabetically (א-ת)",
         "data": {
           "city_id": "City"
         }

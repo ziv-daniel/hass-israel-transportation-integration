@@ -65,16 +65,28 @@ def load_cities_index() -> Dict:
     return _CITIES_INDEX_CACHE
 
 
-def get_cities_list() -> List[Dict[str, str]]:
-    """Get list of all cities with transit stations.
+def get_cities_list(
+    min_stations: int = 50,
+    max_cities: int = 50,
+    top_cities_count: int = 3,
+) -> List[Dict[str, str]]:
+    """Get list of cities with transit stations, filtered and sorted.
+
+    Cities are filtered to only include those with a minimum number of stations,
+    sorted with the largest cities first, then alphabetically by Hebrew name (א-ת).
+
+    Args:
+        min_stations: Minimum number of stations required (default: 50)
+        max_cities: Maximum number of cities to return (default: 50)
+        top_cities_count: Number of largest cities to show first (default: 3)
 
     Returns:
-        List of dictionaries with 'id' and 'name' keys, sorted alphabetically
+        List of dictionaries with 'id', 'name', 'name_he', and 'station_count' keys
 
     Example:
         [
-            {'id': 'Jerusalem', 'name': 'Jerusalem / ירושלים (464 stations)'},
-            {'id': 'Tel Aviv', 'name': 'Tel Aviv / תל אביב (157 stations)'},
+            {'id': 'Jerusalem', 'name': 'Jerusalem / ירושלים (464 stations)',
+             'name_he': 'ירושלים', 'station_count': 464},
             ...
         ]
     """
@@ -92,6 +104,10 @@ def get_cities_list() -> List[Dict[str, str]]:
         if city_id == "Other":
             continue
 
+        # Filter by minimum station count
+        if station_count < min_stations:
+            continue
+
         # Build bilingual city name if Hebrew name is available
         city_name_he = city_data.get("name_he", "")
         if city_name_he:
@@ -99,11 +115,70 @@ def get_cities_list() -> List[Dict[str, str]]:
         else:
             display_name = f"{city_id} ({station_count} stations)"
 
-        cities.append({"id": city_id, "name": display_name})
+        cities.append({
+            "id": city_id,
+            "name": display_name,
+            "name_he": city_name_he or city_id,
+            "station_count": station_count,
+        })
 
-    # Sort alphabetically by city name
-    cities.sort(key=lambda c: c["id"])
+    # Sort all cities by Hebrew name (א-ת)
+    cities.sort(key=lambda c: c["name_he"])
 
+    # Extract top N cities by station count
+    top_cities = sorted(cities, key=lambda c: c["station_count"], reverse=True)[
+        :top_cities_count
+    ]
+    top_city_ids = {c["id"] for c in top_cities}
+
+    # Get remaining cities (excluding top cities), already sorted by Hebrew name
+    remaining_cities = [c for c in cities if c["id"] not in top_city_ids]
+
+    # Combine: top cities first (sorted by size), then remaining (sorted by Hebrew)
+    top_cities.sort(key=lambda c: c["station_count"], reverse=True)
+    result = top_cities + remaining_cities
+
+    # Limit to max_cities
+    return result[:max_cities]
+
+
+def get_all_cities_list() -> List[Dict[str, str]]:
+    """Get list of ALL cities with transit stations (no filtering).
+
+    This is used when user wants to see more cities beyond the default filtered list.
+
+    Returns:
+        List of dictionaries with city info, sorted by Hebrew name
+    """
+    try:
+        cities_index = load_cities_index()
+    except FileNotFoundError:
+        _LOGGER.warning("GTFS data not available, returning empty cities list")
+        return []
+
+    cities = []
+    for city_id, city_data in cities_index.items():
+        station_count = len(city_data["stations"])
+
+        # Skip "Other" category
+        if city_id == "Other":
+            continue
+
+        city_name_he = city_data.get("name_he", "")
+        if city_name_he:
+            display_name = f"{city_id} / {city_name_he} ({station_count} stations)"
+        else:
+            display_name = f"{city_id} ({station_count} stations)"
+
+        cities.append({
+            "id": city_id,
+            "name": display_name,
+            "name_he": city_name_he or city_id,
+            "station_count": station_count,
+        })
+
+    # Sort by Hebrew name
+    cities.sort(key=lambda c: c["name_he"])
     return cities
 
 
@@ -176,3 +251,170 @@ def is_gtfs_data_available() -> bool:
         return True
     except (FileNotFoundError, json.JSONDecodeError):
         return False
+
+
+def _calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate approximate distance between two coordinates in km.
+
+    Uses the Haversine formula for distance calculation.
+
+    Args:
+        lat1, lon1: First coordinate (latitude, longitude)
+        lat2, lon2: Second coordinate (latitude, longitude)
+
+    Returns:
+        Distance in kilometers
+    """
+    import math
+
+    # Earth's radius in kilometers
+    R = 6371.0
+
+    # Convert to radians
+    lat1_rad = math.radians(lat1)
+    lat2_rad = math.radians(lat2)
+    delta_lat = math.radians(lat2 - lat1)
+    delta_lon = math.radians(lon2 - lon1)
+
+    # Haversine formula
+    a = (
+        math.sin(delta_lat / 2) ** 2
+        + math.cos(lat1_rad) * math.cos(lat2_rad) * math.sin(delta_lon / 2) ** 2
+    )
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    return R * c
+
+
+def get_nearest_city(
+    home_lat: float, home_lon: float
+) -> Optional[Dict[str, str]]:
+    """Find the nearest city to the given coordinates.
+
+    Calculates the average distance to all stations in each city and
+    returns the city with the smallest average distance.
+
+    Args:
+        home_lat: Home latitude
+        home_lon: Home longitude
+
+    Returns:
+        City dictionary with 'id', 'name', 'distance_km' keys, or None if no data
+    """
+    try:
+        cities_index = load_cities_index()
+    except FileNotFoundError:
+        return None
+
+    nearest_city = None
+    min_distance = float("inf")
+
+    for city_id, city_data in cities_index.items():
+        if city_id == "Other":
+            continue
+
+        stations = city_data.get("stations", [])
+        if not stations:
+            continue
+
+        # Calculate average distance to all stations in this city
+        total_distance = 0.0
+        valid_stations = 0
+
+        for station in stations:
+            lat = station.get("lat")
+            lon = station.get("lon")
+            if lat is not None and lon is not None:
+                total_distance += _calculate_distance(home_lat, home_lon, lat, lon)
+                valid_stations += 1
+
+        if valid_stations == 0:
+            continue
+
+        avg_distance = total_distance / valid_stations
+
+        if avg_distance < min_distance:
+            min_distance = avg_distance
+            city_name_he = city_data.get("name_he", "")
+            station_count = len(stations)
+
+            if city_name_he:
+                display_name = f"{city_id} / {city_name_he} ({station_count} stations)"
+            else:
+                display_name = f"{city_id} ({station_count} stations)"
+
+            nearest_city = {
+                "id": city_id,
+                "name": display_name,
+                "name_he": city_name_he or city_id,
+                "station_count": station_count,
+                "distance_km": round(avg_distance, 1),
+            }
+
+    return nearest_city
+
+
+def get_cities_near_location(
+    home_lat: float,
+    home_lon: float,
+    max_distance_km: float = 30.0,
+    max_cities: int = 10,
+) -> List[Dict[str, str]]:
+    """Get cities within a certain distance from the given coordinates.
+
+    Args:
+        home_lat: Home latitude
+        home_lon: Home longitude
+        max_distance_km: Maximum distance in kilometers (default: 30km)
+        max_cities: Maximum number of cities to return (default: 10)
+
+    Returns:
+        List of city dictionaries sorted by distance, closest first
+    """
+    try:
+        cities_index = load_cities_index()
+    except FileNotFoundError:
+        return []
+
+    cities_with_distance = []
+
+    for city_id, city_data in cities_index.items():
+        if city_id == "Other":
+            continue
+
+        stations = city_data.get("stations", [])
+        if not stations:
+            continue
+
+        # Calculate minimum distance to any station in this city
+        min_station_distance = float("inf")
+
+        for station in stations:
+            lat = station.get("lat")
+            lon = station.get("lon")
+            if lat is not None and lon is not None:
+                distance = _calculate_distance(home_lat, home_lon, lat, lon)
+                if distance < min_station_distance:
+                    min_station_distance = distance
+
+        if min_station_distance <= max_distance_km:
+            city_name_he = city_data.get("name_he", "")
+            station_count = len(stations)
+
+            if city_name_he:
+                display_name = f"{city_id} / {city_name_he} ({station_count} stations)"
+            else:
+                display_name = f"{city_id} ({station_count} stations)"
+
+            cities_with_distance.append({
+                "id": city_id,
+                "name": display_name,
+                "name_he": city_name_he or city_id,
+                "station_count": station_count,
+                "distance_km": round(min_station_distance, 1),
+            })
+
+    # Sort by distance, closest first
+    cities_with_distance.sort(key=lambda c: c["distance_km"])
+
+    return cities_with_distance[:max_cities]

@@ -17,8 +17,17 @@ from .api import (
     BusNearbyApiClient,
     InvalidResponseError,
 )
+from homeassistant.helpers.selector import (
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
+
 from .gtfs_loader import (
+    get_all_cities_list,
     get_cities_list,
+    get_cities_near_location,
     get_stations_for_city,
     is_gtfs_data_available,
 )
@@ -186,6 +195,12 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Handle city selection from GTFS data.
 
+        Shows cities filtered and sorted:
+        - Nearby cities first (based on Home Assistant home location)
+        - Then top 3 largest cities
+        - Then remaining cities sorted א-ת (Hebrew alphabetical)
+        - Only cities with 50+ stations are shown
+
         Args:
             user_input: User input data
 
@@ -197,35 +212,170 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             city_id = user_input["city_id"]
 
-            # Handle manual entry fallback
+            # Handle special options
             if city_id == "manual":
                 return await self.async_step_station_config()
+            if city_id == "show_all":
+                return await self.async_step_select_city_all()
 
             # Save selected city and move to station selection
             self._selected_city = city_id
             return await self.async_step_select_station()
 
-        # Get cities from GTFS data
-        cities = get_cities_list()
+        # Try to get home location for nearby city suggestions
+        home_lat = self.hass.config.latitude
+        home_lon = self.hass.config.longitude
+        nearby_cities = []
+        suggested_city = None
+
+        if home_lat and home_lon:
+            # Get cities near home location (within 30km)
+            nearby_cities = get_cities_near_location(
+                home_lat, home_lon, max_distance_km=30.0, max_cities=5
+            )
+            if nearby_cities:
+                suggested_city = nearby_cities[0]
+                _LOGGER.debug(
+                    "Found %d nearby cities. Closest: %s (%.1f km)",
+                    len(nearby_cities),
+                    suggested_city["id"],
+                    suggested_city["distance_km"],
+                )
+
+        # Get filtered cities (>50 stations, top 3 biggest first, then Hebrew sorted)
+        cities = get_cities_list(min_stations=50, max_cities=50, top_cities_count=3)
 
         if not cities:
             # No GTFS data available, fall back to manual entry
             return await self.async_step_station_config()
 
-        # Build city options dictionary
-        city_options = {city["id"]: city["name"] for city in cities}
+        # Build city options list for SelectSelector
+        city_options: list[SelectOptionDict] = []
 
-        # Add manual entry fallback option
-        city_options["manual"] = "🔍 Enter station ID manually..."
+        # Add nearby cities section first (if any)
+        nearby_city_ids = {c["id"] for c in nearby_cities}
+        if nearby_cities:
+            for city in nearby_cities:
+                city_options.append(
+                    SelectOptionDict(
+                        value=city["id"],
+                        label=f"📍 {city['name']} (~{city['distance_km']} km)",
+                    )
+                )
 
+        # Add remaining cities (excluding already added nearby cities)
+        for city in cities:
+            if city["id"] not in nearby_city_ids:
+                city_options.append(
+                    SelectOptionDict(
+                        value=city["id"],
+                        label=city["name"],
+                    )
+                )
+
+        # Add special options at the end
+        city_options.append(
+            SelectOptionDict(
+                value="show_all",
+                label="📋 Show all cities...",
+            )
+        )
+        city_options.append(
+            SelectOptionDict(
+                value="manual",
+                label="🔍 Enter station ID manually...",
+            )
+        )
+
+        # Use SelectSelector with dropdown mode for searchable list
         data_schema = vol.Schema(
             {
-                vol.Required("city_id"): vol.In(city_options),
+                vol.Required(
+                    "city_id",
+                    default=suggested_city["id"] if suggested_city else None,
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=city_options,
+                        mode=SelectSelectorMode.DROPDOWN,
+                        custom_value=False,
+                        sort=False,  # We already sorted it ourselves
+                    )
+                ),
             }
         )
 
         return self.async_show_form(
             step_id="select_city",
+            data_schema=data_schema,
+            errors=errors,
+            description_placeholders={
+                "transport_type": TRANSPORT_TYPE_LABELS.get(
+                    self._transport_type, "transportation"
+                ).lower(),
+            },
+        )
+
+    async def async_step_select_city_all(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle selection from ALL cities (no filtering).
+
+        Args:
+            user_input: User input data
+
+        Returns:
+            Flow result
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            city_id = user_input["city_id"]
+
+            if city_id == "manual":
+                return await self.async_step_station_config()
+
+            self._selected_city = city_id
+            return await self.async_step_select_station()
+
+        # Get ALL cities (no minimum station filter)
+        cities = get_all_cities_list()
+
+        if not cities:
+            return await self.async_step_station_config()
+
+        # Build options list
+        city_options: list[SelectOptionDict] = []
+        for city in cities:
+            city_options.append(
+                SelectOptionDict(
+                    value=city["id"],
+                    label=city["name"],
+                )
+            )
+
+        # Add manual entry option
+        city_options.append(
+            SelectOptionDict(
+                value="manual",
+                label="🔍 Enter station ID manually...",
+            )
+        )
+
+        data_schema = vol.Schema(
+            {
+                vol.Required("city_id"): SelectSelector(
+                    SelectSelectorConfig(
+                        options=city_options,
+                        mode=SelectSelectorMode.DROPDOWN,
+                        custom_value=False,
+                        sort=False,
+                    )
+                ),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="select_city_all",
             data_schema=data_schema,
             errors=errors,
             description_placeholders={
@@ -277,18 +427,37 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # No stations found, fall back to manual entry
             return await self.async_step_station_config()
 
-        # Build station options (limit to reasonable number for UI)
+        # Build station options with SelectSelector
         # Sort by name and take first 100 stations
         sorted_stations = sorted(stations, key=lambda s: s["name"])[:100]
 
-        station_options = {s["id"]: s["name"] for s in sorted_stations}
+        station_options: list[SelectOptionDict] = []
+        for station in sorted_stations:
+            station_options.append(
+                SelectOptionDict(
+                    value=station["id"],
+                    label=f"{station['name']} ({station['id']})",
+                )
+            )
 
         # Add manual entry fallback
-        station_options["manual"] = "🔍 Enter station ID manually..."
+        station_options.append(
+            SelectOptionDict(
+                value="manual",
+                label="🔍 Enter station ID manually...",
+            )
+        )
 
         data_schema = vol.Schema(
             {
-                vol.Required("station_id"): vol.In(station_options),
+                vol.Required("station_id"): SelectSelector(
+                    SelectSelectorConfig(
+                        options=station_options,
+                        mode=SelectSelectorMode.DROPDOWN,
+                        custom_value=False,
+                        sort=False,  # Already sorted alphabetically
+                    )
+                ),
             }
         )
 
