@@ -372,10 +372,14 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             operator = arrival.get("CompanyName", "")
 
             # Create arrival entries for each upcoming arrival
+            now = datetime.now()
             line_arrivals = []
             for minutes in minutes_list:
+                # Calculate arrival time from minutes
+                arrival_time = now + timedelta(minutes=minutes)
                 line_arrivals.append(
                     {
+                        "arrival_time": arrival_time.isoformat(),
                         "minutes_until": minutes,
                         "is_realtime": True,  # Gov API always returns real-time
                         "direction": direction,
