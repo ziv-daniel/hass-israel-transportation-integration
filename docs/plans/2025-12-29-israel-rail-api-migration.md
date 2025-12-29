@@ -24,7 +24,7 @@
 ### Task 1: Add israel-rail-api dependency
 
 **Files:**
-- Modify: `custom_components/silent_bus/manifest.json`
+- Modify: `custom_components/israel_transportation/manifest.json`
 
 **Step 1: Update manifest.json**
 
@@ -32,7 +32,7 @@ Add the library to requirements:
 
 ```json
 {
-  "domain": "silent_bus",
+  "domain": "israel_transportation",
   "name": "Israel Transportation",
   "codeowners": ["@ziv-daniel"],
   "config_flow": true,
@@ -51,7 +51,7 @@ Add the library to requirements:
 **Step 2: Commit**
 
 ```bash
-git add custom_components/silent_bus/manifest.json
+git add custom_components/israel_transportation/manifest.json
 git commit -m "chore: add israel-rail-api dependency for trains"
 ```
 
@@ -60,7 +60,7 @@ git commit -m "chore: add israel-rail-api dependency for trains"
 ### Task 2: Update config_flow.py to use library stations
 
 **Files:**
-- Modify: `custom_components/silent_bus/config_flow.py`
+- Modify: `custom_components/israel_transportation/config_flow.py`
 
 **Step 1: Update imports**
 
@@ -96,7 +96,7 @@ def _get_train_stations(self) -> list[tuple[str, str]]:
 **Step 3: Commit**
 
 ```bash
-git add custom_components/silent_bus/config_flow.py
+git add custom_components/israel_transportation/config_flow.py
 git commit -m "feat: use israel-rail-api station list in config flow"
 ```
 
@@ -105,7 +105,7 @@ git commit -m "feat: use israel-rail-api station list in config flow"
 ### Task 3: Update coordinator.py for Israel Rail API
 
 **Files:**
-- Modify: `custom_components/silent_bus/coordinator.py`
+- Modify: `custom_components/israel_transportation/coordinator.py`
 
 **Step 1: Add import**
 
@@ -248,7 +248,7 @@ In __init__, trains no longer need `api_client` parameter. Update the coordinato
 **Step 5: Commit**
 
 ```bash
-git add custom_components/silent_bus/coordinator.py
+git add custom_components/israel_transportation/coordinator.py
 git commit -m "feat: use Israel Rail API for train routes"
 ```
 
@@ -257,7 +257,7 @@ git commit -m "feat: use Israel Rail API for train routes"
 ### Task 4: Update __init__.py for train setup
 
 **Files:**
-- Modify: `custom_components/silent_bus/__init__.py`
+- Modify: `custom_components/israel_transportation/__init__.py`
 
 **Step 1: Remove api_client from train coordinator initialization**
 
@@ -292,7 +292,7 @@ Move the api_client creation inside the else block or keep it but don't pass to 
 **Step 3: Commit**
 
 ```bash
-git add custom_components/silent_bus/__init__.py
+git add custom_components/israel_transportation/__init__.py
 git commit -m "refactor: train setup uses Israel Rail API directly"
 ```
 
@@ -301,12 +301,12 @@ git commit -m "refactor: train setup uses Israel Rail API directly"
 ### Task 5: Delete train_stations.py
 
 **Files:**
-- Delete: `custom_components/silent_bus/train_stations.py`
+- Delete: `custom_components/israel_transportation/train_stations.py`
 
 **Step 1: Remove the file**
 
 ```bash
-git rm custom_components/silent_bus/train_stations.py
+git rm custom_components/israel_transportation/train_stations.py
 ```
 
 **Step 2: Remove any remaining imports**
@@ -324,7 +324,7 @@ git commit -m "chore: remove train_stations.py (stations from library)"
 ### Task 6: Update sensor.py attribution for trains
 
 **Files:**
-- Modify: `custom_components/silent_bus/sensor.py`
+- Modify: `custom_components/israel_transportation/sensor.py`
 
 **Step 1: Add new attribution constant**
 
@@ -356,7 +356,7 @@ attributes = {
 **Step 3: Commit**
 
 ```bash
-git add custom_components/silent_bus/const.py custom_components/silent_bus/sensor.py
+git add custom_components/israel_transportation/const.py custom_components/israel_transportation/sensor.py
 git commit -m "fix: correct attribution for train data"
 ```
 
@@ -367,8 +367,8 @@ git commit -m "fix: correct attribution for train data"
 **Step 1: Run linting**
 
 ```bash
-ruff check custom_components/silent_bus/
-ruff format custom_components/silent_bus/
+ruff check custom_components/israel_transportation/
+ruff format custom_components/israel_transportation/
 ```
 
 **Step 2: Test in Home Assistant**

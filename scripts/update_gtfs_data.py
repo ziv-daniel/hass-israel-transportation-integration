@@ -47,7 +47,7 @@ except ImportError:
 
 # Configuration
 GTFS_URL = "https://gtfs.mot.gov.il/gtfsfiles/israel-public-transportation.zip"
-OUTPUT_DIR = Path("custom_components/silent_bus/gtfs_data")
+OUTPUT_DIR = Path("custom_components/israel_transportation/gtfs_data")
 CITIES_INDEX_FILE = "cities_index.json"
 
 
@@ -75,8 +75,8 @@ def extract_city_from_name(stop_name: str) -> str:
     stop_name = " ".join(stop_name.split())
 
     # Words to exclude from city matching (common words that aren't city names)
-    # "שדרות" = boulevard/avenue (also a city name, but more commonly a street type)
-    EXCLUDE_WORDS = {"שדרות", "רחוב", "דרך", "כביש", "מרכז", "תחנה"}
+    # Note: "שדרות" removed - handled specially below as it's both a city name (Sderot) and boulevard
+    EXCLUDE_WORDS = {"רחוב", "דרך", "כביש", "מרכז", "תחנה"}
 
     # Strategy 1: Try pattern-based extraction first (most reliable)
     # These patterns extract cities from structured formats like "Station - City"
@@ -137,6 +137,15 @@ def extract_city_from_name(stop_name: str) -> str:
         # Skip common words that aren't actually cities in this context
         if he_city in EXCLUDE_WORDS:
             continue
+
+        # Special handling for "שדרות" (Sderot) - both a city name and "boulevard"
+        # Only match if it's NOT followed by a street name (which would indicate boulevard usage)
+        if he_city == "שדרות":
+            # Pattern: "שדרות" followed by another Hebrew word = boulevard (skip)
+            # Pattern: "שדרות" standalone or with separators = city name (include)
+            if re.search(r"שדרות\s+[א-ת]", stop_name):
+                # Likely "שדרות <street name>" = boulevard, skip
+                continue
 
         # Use word boundary matching - city must be surrounded by spaces, dashes, or string boundaries
         # This prevents "שדרות" in "שדרות ירושלים" from matching

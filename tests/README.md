@@ -31,7 +31,7 @@ pytest tests/
 pytest -v tests/
 
 # With coverage report
-pytest --cov=custom_components.silent_bus --cov-report=html tests/
+pytest --cov=custom_components.israel_transportation --cov-report=html tests/
 ```
 
 ### Run Only Unit Tests
@@ -62,10 +62,10 @@ pytest tests/integration/test_config_flow_integration.py::test_bus_station_12664
 
 ```bash
 # Generate coverage report
-pytest --cov=custom_components.silent_bus --cov-report=term-missing tests/
+pytest --cov=custom_components.israel_transportation --cov-report=term-missing tests/
 
 # Generate HTML coverage report
-pytest --cov=custom_components.silent_bus --cov-report=html tests/
+pytest --cov=custom_components.israel_transportation --cov-report=html tests/
 # Then open htmlcov/index.html in your browser
 ```
 
@@ -151,7 +151,7 @@ The project maintains **>90% test coverage** for all core components:
 
 Check current coverage:
 ```bash
-pytest --cov=custom_components.silent_bus --cov-report=term-missing tests/
+pytest --cov=custom_components.israel_transportation --cov-report=term-missing tests/
 ```
 
 ## Writing New Tests
@@ -175,7 +175,7 @@ async def test_specific_functionality(hass):
     Include context about why this test is important.
     """
     # Arrange: Set up test data and mocks
-    with patch("custom_components.silent_bus.api.BusNearbyApiClient") as mock_client:
+    with patch("custom_components.israel_transportation.api.BusNearbyApiClient") as mock_client:
         mock_client.return_value.search_station = AsyncMock(
             return_value=[{"stop_id": "12345", "name": "Test Station"}]
         )
@@ -230,7 +230,7 @@ mock_session.get = MagicMock(
 @pytest.mark.asyncio
 async def test_error_handling(hass):
     """Test that errors are handled gracefully."""
-    with patch("custom_components.silent_bus.api.BusNearbyApiClient") as mock:
+    with patch("custom_components.israel_transportation.api.BusNearbyApiClient") as mock:
         mock.return_value.search_station = AsyncMock(
             side_effect=ApiConnectionError("Connection failed")
         )

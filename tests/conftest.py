@@ -1,4 +1,4 @@
-"""Fixtures for Silent Bus tests."""
+"""Fixtures for Israel Transportation tests."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import pytest
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.silent_bus.const import (
+from custom_components.israel_transportation.const import (
     CONF_BUS_LINES,
     CONF_MAX_ARRIVALS,
     CONF_STATION_ID,
@@ -33,7 +33,7 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 @pytest.fixture
 def mock_api_client():
     """Mock BusNearbyApiClient for train tests."""
-    with patch("custom_components.silent_bus.api.BusNearbyApiClient") as mock:
+    with patch("custom_components.israel_transportation.api.BusNearbyApiClient") as mock:
         client = mock.return_value
         client.validate_station = AsyncMock(return_value=True)
         client.search_station = AsyncMock(
@@ -74,7 +74,7 @@ def mock_api_client():
 @pytest.fixture
 def mock_gov_api_client():
     """Mock GovApiClient for bus/light rail tests."""
-    with patch("custom_components.silent_bus.gov_api.GovApiClient") as mock:
+    with patch("custom_components.israel_transportation.gov_api.GovApiClient") as mock:
         client = mock.return_value
         client.validate_station = AsyncMock(return_value=True)
         client.get_station = AsyncMock(
@@ -149,7 +149,7 @@ async def setup_integration(hass: HomeAssistant, mock_config_entry, mock_gov_api
     mock_config_entry.add_to_hass(hass)
 
     with patch(
-        "custom_components.silent_bus.GovApiClient",
+        "custom_components.israel_transportation.GovApiClient",
         return_value=mock_gov_api_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)

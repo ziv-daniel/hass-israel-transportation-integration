@@ -97,7 +97,11 @@
       "mcp__plugin_playwright_playwright__browser_handle_dialog",
       "mcp__plugin_playwright_playwright__browser_install",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nchore: clean up and enhance Claude settings permissions\n\n- Consolidated 139 redundant allow entries into 73 generic patterns\n- Added deny list to explicitly block deletion commands \\(rm, del, rmdir, etc.\\)\n- Added deny list for destructive git operations \\(git rm, git clean, git branch -D, etc.\\)\n- Simplified git permissions to single pattern with deny list protection\n- Added missing MCP tools for chrome-devtools and playwright\n- Added Node.js tooling \\(npm, npx, node, yarn\\)\n- Removed malformed paths with broken backslash escaping\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git commit :*)",
+      "Bash(git push:*)",
+      "Skill(superpowers:brainstorming)",
+      "Bash(dir :*)",
+      "Bash(move:*)"
     ],
     "deny": [
       "Bash(rm:*)",
@@ -112,9 +116,9 @@
       "Bash(erase:*)",
       "Bash(shred:*)",
       "Bash(unlink:*)",
-      "Bash(*| rm *)",
-      "Bash(*&& rm *)",
-      "Bash(*; rm *)",
+      "Bash(:*| rm :*)",
+      "Bash(:*&& rm :*)",
+      "Bash(:*; rm :*)",
       "Bash(git clean:*)",
       "Bash(git rm:*)",
       "Bash(git rm -r:*)",

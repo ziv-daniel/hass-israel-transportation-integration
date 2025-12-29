@@ -111,7 +111,7 @@ busLines:
 ### 2.1 File Structure
 
 ```
-custom_components/silent_bus/
+custom_components/israel_transportation/
 ├── __init__.py              # Integration setup and entry point
 ├── manifest.json            # Integration metadata
 ├── config_flow.py          # UI configuration flow
@@ -133,7 +133,7 @@ Defines integration metadata for Home Assistant:
 
 ```json
 {
-  "domain": "silent_bus",
+  "domain": "israel_transportation",
   "name": "Silent Bus",
   "codeowners": ["@yourusername"],
   "config_flow": true,
@@ -243,10 +243,10 @@ Creates sensor entities for each bus line:
 
 **Unique ID Format:**
 ```
-silent_bus_{station_id}_{line_number}
+israel_transportation_{station_id}_{line_number}
 ```
 
-Example: `silent_bus_24068_249`
+Example: `israel_transportation_24068_249`
 
 **Entity Naming:**
 - Entity ID: `sensor.bus_24068_line_249`

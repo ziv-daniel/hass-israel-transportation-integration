@@ -251,28 +251,13 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._selected_city = city_id
             return await self.async_step_select_station()
 
-        # Try to get home location for nearby city suggestions
+        # Get home location for proximity sorting
         home_lat = self.hass.config.latitude
         home_lon = self.hass.config.longitude
-        nearby_cities = []
-        suggested_city = None
 
-        if home_lat and home_lon:
-            # Get cities near home location (within 30km)
-            nearby_cities = get_cities_near_location(
-                home_lat, home_lon, max_distance_km=30.0, max_cities=5
-            )
-            if nearby_cities:
-                suggested_city = nearby_cities[0]
-                _LOGGER.debug(
-                    "Found %d nearby cities. Closest: %s (%.1f km)",
-                    len(nearby_cities),
-                    suggested_city["id"],
-                    suggested_city["distance_km"],
-                )
-
-        # Get filtered cities (>50 stations, top 3 biggest first, then Hebrew sorted)
-        cities = get_cities_list(min_stations=50, max_cities=50, top_cities_count=3)
+        # Get cities list - shows 3 closest first (if coordinates available), then all others alphabetically
+        # No filtering by min_stations - shows ALL cities
+        cities = get_cities_list(home_lat=home_lat, home_lon=home_lon)
 
         if not cities:
             # No GTFS data available, fall back to manual entry
@@ -281,26 +266,14 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Build city options list for SelectSelector
         city_options: list[SelectOptionDict] = []
 
-        # Add nearby cities section first (if any)
-        nearby_city_ids = {c["id"] for c in nearby_cities}
-        if nearby_cities:
-            for city in nearby_cities:
-                city_options.append(
-                    SelectOptionDict(
-                        value=city["id"],
-                        label=f"📍 {city['name']} (~{city['distance_km']} km)",
-                    )
-                )
-
-        # Add remaining cities (excluding already added nearby cities)
+        # Add all cities (already sorted: nearby first with 📍, then alphabetical)
         for city in cities:
-            if city["id"] not in nearby_city_ids:
-                city_options.append(
-                    SelectOptionDict(
-                        value=city["id"],
-                        label=city["name"],
-                    )
+            city_options.append(
+                SelectOptionDict(
+                    value=city["id"],
+                    label=city["name"],
                 )
+            )
 
         # Add special options at the end
         city_options.append(

@@ -160,7 +160,7 @@ The Silent Bus Home Assistant integration has been successfully developed, teste
 #### 8. Manifest (`manifest.json`)
 - **Status**: ✅ Complete and valid
 - **Content**:
-  - Domain: `silent_bus`
+  - Domain: `israel_transportation`
   - Version: 1.0.0
   - Config flow enabled
   - Requirements: aiohttp>=3.9.0
@@ -355,7 +355,7 @@ The Silent Bus Home Assistant integration has been successfully developed, teste
 ```
 Silent-bus-integration/
 ├── custom_components/
-│   └── silent_bus/
+│   └── israel_transportation/
 │       ├── __init__.py           ✅ 130 lines
 │       ├── api.py                ✅ 240 lines
 │       ├── config_flow.py        ✅ 220 lines

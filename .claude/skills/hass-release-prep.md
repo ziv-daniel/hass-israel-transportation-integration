@@ -19,7 +19,7 @@ git status
 git log --oneline -5
 
 # Get current version
-python -c "import json; print(json.load(open('custom_components/silent_bus/manifest.json'))['version'])"
+python -c "import json; print(json.load(open('custom_components/israel_transportation/manifest.json'))['version'])"
 
 # Check GitHub Actions status
 gh run list --limit 5
@@ -31,7 +31,7 @@ gh run list --limit 5
 # Check version consistency across all files
 import json
 
-manifest_version = json.load(open('custom_components/silent_bus/manifest.json'))['version']
+manifest_version = json.load(open('custom_components/israel_transportation/manifest.json'))['version']
 
 # Check CHANGELOG has entry
 with open('CHANGELOG.md') as f:
@@ -57,7 +57,7 @@ All must pass before release:
 
 ```bash
 # Get version from manifest
-VERSION=$(python -c "import json; print(json.load(open('custom_components/silent_bus/manifest.json'))['version'])")
+VERSION=$(python -c "import json; print(json.load(open('custom_components/israel_transportation/manifest.json'))['version'])")
 echo "Releasing version: $VERSION"
 
 # Ensure on main branch
@@ -107,7 +107,7 @@ gh run watch
 
 3. **Commit and push:**
 ```bash
-git add custom_components/silent_bus/manifest.json CHANGELOG.md
+git add custom_components/israel_transportation/manifest.json CHANGELOG.md
 git commit -m "Bump version to 1.4.0"
 git push
 ```
@@ -218,7 +218,7 @@ If HACS doesn't update:
 
 ## Related Files
 
-- `custom_components/silent_bus/manifest.json` - Version source
+- `custom_components/israel_transportation/manifest.json` - Version source
 - `CHANGELOG.md` - Release notes
 - `.github/workflows/publish.yaml` - Release automation
 - `.github/workflows/hassfest.yaml` - Validation

@@ -10,7 +10,7 @@ if len(sys.argv) != 2:
     sys.exit(1)
 
 new_version = sys.argv[1]
-manifest_path = Path("custom_components/silent_bus/manifest.json")
+manifest_path = Path("custom_components/israel_transportation/manifest.json")
 
 manifest = json.loads(manifest_path.read_text())
 manifest["version"] = new_version

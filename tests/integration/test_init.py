@@ -9,7 +9,7 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 
-from custom_components.silent_bus.const import (
+from custom_components.israel_transportation.const import (
     CONF_BUS_LINES,
     CONF_STATION_ID,
     DOMAIN,
@@ -26,7 +26,7 @@ async def test_setup_and_unload(
     mock_config_entry.add_to_hass(hass)
 
     with patch(
-        "custom_components.silent_bus.GovApiClient",
+        "custom_components.israel_transportation.GovApiClient",
         return_value=mock_gov_api_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -57,7 +57,7 @@ async def test_setup_failure_invalid_station(hass: HomeAssistant, mock_config_en
     mock_config_entry.add_to_hass(hass)
 
     with patch(
-        "custom_components.silent_bus.GovApiClient",
+        "custom_components.israel_transportation.GovApiClient",
         return_value=mock_gov_api_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -72,7 +72,7 @@ async def test_reload_entry(hass: HomeAssistant, mock_config_entry, mock_gov_api
     mock_config_entry.add_to_hass(hass)
 
     with patch(
-        "custom_components.silent_bus.GovApiClient",
+        "custom_components.israel_transportation.GovApiClient",
         return_value=mock_gov_api_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
@@ -93,7 +93,7 @@ async def test_sensors_created(hass: HomeAssistant, mock_config_entry, mock_gov_
     mock_config_entry.add_to_hass(hass)
 
     with patch(
-        "custom_components.silent_bus.GovApiClient",
+        "custom_components.israel_transportation.GovApiClient",
         return_value=mock_gov_api_client,
     ):
         await hass.config_entries.async_setup(mock_config_entry.entry_id)

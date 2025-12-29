@@ -36,7 +36,7 @@ pre-commit run --all-files
 ### Step 3: Run Test Suite
 ```bash
 # Full test with coverage
-pytest --cov=custom_components.silent_bus --cov-report=term-missing -v
+pytest --cov=custom_components.israel_transportation --cov-report=term-missing -v
 
 # Quick run without coverage
 pytest -v

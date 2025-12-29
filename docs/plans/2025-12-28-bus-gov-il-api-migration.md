@@ -15,7 +15,7 @@
 ## Task 1: Add bus.gov.il Constants
 
 **Files:**
-- Modify: `custom_components/silent_bus/const.py`
+- Modify: `custom_components/israel_transportation/const.py`
 
 **Step 1: Add new constants**
 
@@ -43,7 +43,7 @@ ATTRIBUTION_GOV: Final = "Data provided by Israel Ministry of Transportation"
 **Step 3: Commit**
 
 ```bash
-git add custom_components/silent_bus/const.py
+git add custom_components/israel_transportation/const.py
 git commit -m "feat: add bus.gov.il API constants"
 ```
 
@@ -52,7 +52,7 @@ git commit -m "feat: add bus.gov.il API constants"
 ## Task 2: Create GovApiClient - Basic Structure
 
 **Files:**
-- Create: `custom_components/silent_bus/gov_api.py`
+- Create: `custom_components/israel_transportation/gov_api.py`
 - Create: `tests/unit/test_gov_api.py`
 
 **Step 1: Write failing test for client initialization**
@@ -65,7 +65,7 @@ Create `tests/unit/test_gov_api.py`:
 import pytest
 from aiohttp import ClientSession
 
-from custom_components.silent_bus.gov_api import GovApiClient
+from custom_components.israel_transportation.gov_api import GovApiClient
 
 
 class TestGovApiClientInit:
@@ -91,11 +91,11 @@ class TestGovApiClientInit:
 pytest tests/unit/test_gov_api.py -v
 ```
 
-Expected: FAIL with "ModuleNotFoundError: No module named 'custom_components.silent_bus.gov_api'"
+Expected: FAIL with "ModuleNotFoundError: No module named 'custom_components.israel_transportation.gov_api'"
 
 **Step 3: Write minimal implementation**
 
-Create `custom_components/silent_bus/gov_api.py`:
+Create `custom_components/israel_transportation/gov_api.py`:
 
 ```python
 """API client for bus.gov.il (Israel Ministry of Transportation)."""
@@ -174,7 +174,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add custom_components/silent_bus/gov_api.py tests/unit/test_gov_api.py
+git add custom_components/israel_transportation/gov_api.py tests/unit/test_gov_api.py
 git commit -m "feat: add GovApiClient basic structure"
 ```
 
@@ -183,7 +183,7 @@ git commit -m "feat: add GovApiClient basic structure"
 ## Task 3: Implement get_station Method
 
 **Files:**
-- Modify: `custom_components/silent_bus/gov_api.py`
+- Modify: `custom_components/israel_transportation/gov_api.py`
 - Modify: `tests/unit/test_gov_api.py`
 
 **Step 1: Write failing test for get_station**
@@ -249,7 +249,7 @@ Expected: FAIL with "AttributeError: 'GovApiClient' object has no attribute '_ma
 
 **Step 3: Write implementation**
 
-Add to `custom_components/silent_bus/gov_api.py` after `close()` method:
+Add to `custom_components/israel_transportation/gov_api.py` after `close()` method:
 
 ```python
     async def _make_request(self, url: str) -> dict[str, Any] | list[Any]:
@@ -318,7 +318,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add custom_components/silent_bus/gov_api.py tests/unit/test_gov_api.py
+git add custom_components/israel_transportation/gov_api.py tests/unit/test_gov_api.py
 git commit -m "feat: add get_station method to GovApiClient"
 ```
 
@@ -327,7 +327,7 @@ git commit -m "feat: add get_station method to GovApiClient"
 ## Task 4: Implement validate_station Method
 
 **Files:**
-- Modify: `custom_components/silent_bus/gov_api.py`
+- Modify: `custom_components/israel_transportation/gov_api.py`
 - Modify: `tests/unit/test_gov_api.py`
 
 **Step 1: Write failing test for validate_station**
@@ -394,7 +394,7 @@ Expected: FAIL with "AttributeError: 'GovApiClient' object has no attribute 'val
 
 **Step 3: Write implementation**
 
-Add to `custom_components/silent_bus/gov_api.py` after `get_station()` method:
+Add to `custom_components/israel_transportation/gov_api.py` after `get_station()` method:
 
 ```python
     async def validate_station(self, makat: str) -> bool:
@@ -424,7 +424,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add custom_components/silent_bus/gov_api.py tests/unit/test_gov_api.py
+git add custom_components/israel_transportation/gov_api.py tests/unit/test_gov_api.py
 git commit -m "feat: add validate_station method to GovApiClient"
 ```
 
@@ -433,7 +433,7 @@ git commit -m "feat: add validate_station method to GovApiClient"
 ## Task 5: Implement get_arrivals Method
 
 **Files:**
-- Modify: `custom_components/silent_bus/gov_api.py`
+- Modify: `custom_components/israel_transportation/gov_api.py`
 - Modify: `tests/unit/test_gov_api.py`
 
 **Step 1: Write failing test for get_arrivals**
@@ -517,7 +517,7 @@ Expected: FAIL with "AttributeError: 'GovApiClient' object has no attribute 'get
 
 **Step 3: Write implementation**
 
-Add to `custom_components/silent_bus/gov_api.py` after `validate_station()` method:
+Add to `custom_components/israel_transportation/gov_api.py` after `validate_station()` method:
 
 ```python
     async def get_arrivals(
@@ -570,7 +570,7 @@ Expected: PASS
 **Step 5: Commit**
 
 ```bash
-git add custom_components/silent_bus/gov_api.py tests/unit/test_gov_api.py
+git add custom_components/israel_transportation/gov_api.py tests/unit/test_gov_api.py
 git commit -m "feat: add get_arrivals method to GovApiClient"
 ```
 
@@ -579,7 +579,7 @@ git commit -m "feat: add get_arrivals method to GovApiClient"
 ## Task 6: Update Coordinator to Support Both APIs
 
 **Files:**
-- Modify: `custom_components/silent_bus/coordinator.py`
+- Modify: `custom_components/israel_transportation/coordinator.py`
 
 **Step 1: Add import and new parameter**
 
@@ -613,7 +613,7 @@ And add to the body after `self.api_client = api_client`:
 **Step 3: Commit**
 
 ```bash
-git add custom_components/silent_bus/coordinator.py
+git add custom_components/israel_transportation/coordinator.py
 git commit -m "feat: add gov_api_client parameter to coordinator"
 ```
 
@@ -622,7 +622,7 @@ git commit -m "feat: add gov_api_client parameter to coordinator"
 ## Task 7: Implement _fetch_gov_arrivals Method in Coordinator
 
 **Files:**
-- Modify: `custom_components/silent_bus/coordinator.py`
+- Modify: `custom_components/israel_transportation/coordinator.py`
 
 **Step 1: Add new method for fetching from gov API**
 
@@ -764,7 +764,7 @@ Modify the `_async_update_data` method. Replace the bus/light_rail section (the 
 **Step 3: Commit**
 
 ```bash
-git add custom_components/silent_bus/coordinator.py
+git add custom_components/israel_transportation/coordinator.py
 git commit -m "feat: add gov API fetch and processing to coordinator"
 ```
 
@@ -773,7 +773,7 @@ git commit -m "feat: add gov API fetch and processing to coordinator"
 ## Task 8: Update Integration Setup
 
 **Files:**
-- Modify: `custom_components/silent_bus/__init__.py`
+- Modify: `custom_components/israel_transportation/__init__.py`
 
 **Step 1: Add import**
 
@@ -821,7 +821,7 @@ Replace the bus/light_rail setup section (the `else` block starting around line 
 **Step 3: Commit**
 
 ```bash
-git add custom_components/silent_bus/__init__.py
+git add custom_components/israel_transportation/__init__.py
 git commit -m "feat: use GovApiClient for bus/light_rail setup"
 ```
 
@@ -830,7 +830,7 @@ git commit -m "feat: use GovApiClient for bus/light_rail setup"
 ## Task 9: Simplify Config Flow - Remove Translation Logic
 
 **Files:**
-- Modify: `custom_components/silent_bus/config_flow.py`
+- Modify: `custom_components/israel_transportation/config_flow.py`
 
 **Step 1: Add import**
 
@@ -883,7 +883,7 @@ Remove these imports from config_flow.py if they become unused:
 **Step 4: Commit**
 
 ```bash
-git add custom_components/silent_bus/config_flow.py
+git add custom_components/israel_transportation/config_flow.py
 git commit -m "feat: simplify config flow to use gov API directly"
 ```
 
@@ -901,7 +901,7 @@ For any tests that create bus/light_rail entries, mock `GovApiClient` instead of
 
 ```python
 from unittest.mock import patch, AsyncMock
-from custom_components.silent_bus.gov_api import GovApiClient
+from custom_components.israel_transportation.gov_api import GovApiClient
 
 # In test setup or individual tests:
 with patch.object(GovApiClient, "validate_station", new_callable=AsyncMock) as mock_validate:
@@ -935,7 +935,7 @@ git commit -m "test: update tests to use gov API mocks"
 ## Task 11: Update Sensor Attribution
 
 **Files:**
-- Modify: `custom_components/silent_bus/sensor.py`
+- Modify: `custom_components/israel_transportation/sensor.py`
 
 **Step 1: Update attribution based on transport type**
 
@@ -964,7 +964,7 @@ def extra_state_attributes(self) -> dict[str, Any]:
 **Step 2: Commit**
 
 ```bash
-git add custom_components/silent_bus/sensor.py
+git add custom_components/israel_transportation/sensor.py
 git commit -m "feat: update attribution based on transport type"
 ```
 
@@ -975,7 +975,7 @@ git commit -m "feat: update attribution based on transport type"
 **Step 1: Run all tests**
 
 ```bash
-pytest tests/ -v --cov=custom_components.silent_bus
+pytest tests/ -v --cov=custom_components.israel_transportation
 ```
 
 Expected: All tests pass with good coverage
@@ -983,8 +983,8 @@ Expected: All tests pass with good coverage
 **Step 2: Run linting**
 
 ```bash
-ruff check custom_components/silent_bus/
-ruff format custom_components/silent_bus/
+ruff check custom_components/israel_transportation/
+ruff format custom_components/israel_transportation/
 ```
 
 **Step 3: Test in Home Assistant**

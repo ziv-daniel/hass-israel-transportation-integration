@@ -35,5 +35,5 @@ jobs:
       - name: "Run tests with pytest"
         run: |
           pytest tests/ \
-            --cov=custom_components.silent_bus \
+            --cov=custom_components.israel_transportation \
             --cov-report=term-missing

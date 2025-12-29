@@ -12,12 +12,12 @@ Validate the Israel Transportation (Silent Bus) integration against Home Assista
 
 ### Phase 1: Manifest Validation
 
-Check `custom_components/silent_bus/manifest.json`:
+Check `custom_components/israel_transportation/manifest.json`:
 
 ```bash
 python -c "
 import json
-with open('custom_components/silent_bus/manifest.json') as f:
+with open('custom_components/israel_transportation/manifest.json') as f:
     m = json.load(f)
     required = ['domain', 'name', 'version', 'documentation', 'issue_tracker', 'iot_class', 'requirements', 'codeowners']
     missing = [k for k in required if k not in m]
@@ -31,7 +31,7 @@ with open('custom_components/silent_bus/manifest.json') as f:
 **Expected Fields:**
 | Field | Current Value | Validation |
 |-------|--------------|------------|
-| domain | `silent_bus` | Must match folder name |
+| domain | `israel_transportation` | Must match folder name |
 | name | `Israel Transportation` | User-facing name |
 | version | `1.3.3` | Semver format |
 | documentation | GitHub URL | Must be valid URL |
@@ -67,9 +67,9 @@ python -c "
 import json
 import os
 
-strings = json.load(open('custom_components/silent_bus/strings.json'))
-en = json.load(open('custom_components/silent_bus/translations/en.json'))
-he = json.load(open('custom_components/silent_bus/translations/he.json'))
+strings = json.load(open('custom_components/israel_transportation/strings.json'))
+en = json.load(open('custom_components/israel_transportation/translations/en.json'))
+he = json.load(open('custom_components/israel_transportation/translations/he.json'))
 
 def get_keys(d, prefix=''):
     keys = set()
@@ -104,7 +104,7 @@ import json
 import re
 
 # Get manifest version
-manifest = json.load(open('custom_components/silent_bus/manifest.json'))
+manifest = json.load(open('custom_components/israel_transportation/manifest.json'))
 version = manifest['version']
 
 # Check CHANGELOG
@@ -121,14 +121,14 @@ with open('CHANGELOG.md') as f:
 
 ```bash
 # Required files
-ls -la custom_components/silent_bus/__init__.py
-ls -la custom_components/silent_bus/manifest.json
-ls -la custom_components/silent_bus/config_flow.py
-ls -la custom_components/silent_bus/const.py
-ls -la custom_components/silent_bus/sensor.py
-ls -la custom_components/silent_bus/strings.json
-ls -la custom_components/silent_bus/translations/en.json
-ls -la custom_components/silent_bus/translations/he.json
+ls -la custom_components/israel_transportation/__init__.py
+ls -la custom_components/israel_transportation/manifest.json
+ls -la custom_components/israel_transportation/config_flow.py
+ls -la custom_components/israel_transportation/const.py
+ls -la custom_components/israel_transportation/sensor.py
+ls -la custom_components/israel_transportation/strings.json
+ls -la custom_components/israel_transportation/translations/en.json
+ls -la custom_components/israel_transportation/translations/he.json
 ls -la hacs.json
 ls -la CHANGELOG.md
 ```
@@ -199,15 +199,15 @@ Run all validations in one go:
 ```bash
 # Full validation suite
 pre-commit run --all-files && \
-python -c "import json; m=json.load(open('custom_components/silent_bus/manifest.json')); print(f'Version: {m[\"version\"]}')" && \
+python -c "import json; m=json.load(open('custom_components/israel_transportation/manifest.json')); print(f'Version: {m[\"version\"]}')" && \
 pytest -v --tb=short
 ```
 
 ## Related Files
 
-- `custom_components/silent_bus/manifest.json` - Integration metadata
-- `custom_components/silent_bus/strings.json` - UI strings source
-- `custom_components/silent_bus/translations/` - Language files
+- `custom_components/israel_transportation/manifest.json` - Integration metadata
+- `custom_components/israel_transportation/strings.json` - UI strings source
+- `custom_components/israel_transportation/translations/` - Language files
 - `hacs.json` - HACS configuration
 - `CHANGELOG.md` - Version history
 - `.github/workflows/hassfest.yaml` - HA validation workflow

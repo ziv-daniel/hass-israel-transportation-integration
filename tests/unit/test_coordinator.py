@@ -9,8 +9,8 @@ import pytest
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
-from custom_components.silent_bus.api import BusNearbyApiError
-from custom_components.silent_bus.coordinator import SilentBusCoordinator
+from custom_components.israel_transportation.api import BusNearbyApiError
+from custom_components.israel_transportation.coordinator import SilentBusCoordinator
 
 
 @pytest.mark.asyncio

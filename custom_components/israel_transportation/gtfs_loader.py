@@ -90,25 +90,32 @@ async def async_load_cities_index() -> Dict:
 
 
 def get_cities_list(
-    min_stations: int = 50,
-    max_cities: int = 50,
+    home_lat: float | None = None,
+    home_lon: float | None = None,
+    min_stations: int = 1,
+    max_cities: int = 9999,
     top_cities_count: int = 3,
 ) -> List[Dict[str, str]]:
     """Get list of cities with transit stations, filtered and sorted.
 
-    Cities are filtered to only include those with a minimum number of stations,
-    sorted with the largest cities first, then alphabetically by Hebrew name (א-ת).
+    If home coordinates are provided, shows the 3 closest cities first,
+    then all remaining cities sorted alphabetically by Hebrew name (א-ת).
+    If no coordinates, shows all cities sorted alphabetically.
 
     Args:
-        min_stations: Minimum number of stations required (default: 50)
-        max_cities: Maximum number of cities to return (default: 50)
-        top_cities_count: Number of largest cities to show first (default: 3)
+        home_lat: Home latitude for proximity sorting (optional)
+        home_lon: Home longitude for proximity sorting (optional)
+        min_stations: Minimum number of stations required (default: 1)
+        max_cities: Maximum number of cities to return (default: 9999 = all)
+        top_cities_count: Number of closest cities to show first (default: 3)
 
     Returns:
         List of dictionaries with 'id', 'name', 'name_he', and 'station_count' keys
 
     Example:
         [
+            {'id': 'Sderot', 'name': 'Sderot / שדרות (~2 km)',
+             'name_he': 'שדרות', 'station_count': 15},
             {'id': 'Jerusalem', 'name': 'Jerusalem / ירושלים (464 stations)',
              'name_he': 'ירושלים', 'station_count': 464},
             ...
@@ -148,21 +155,37 @@ def get_cities_list(
             }
         )
 
-    # Sort all cities by Hebrew name (א-ת)
-    cities.sort(key=lambda c: c["name_he"])
+    # If home coordinates provided, show closest cities first
+    if home_lat is not None and home_lon is not None:
+        # Get closest cities by location
+        nearby_cities = get_cities_near_location(
+            home_lat, home_lon, max_distance_km=9999, max_cities=top_cities_count
+        )
+        nearby_city_ids = {c["id"] for c in nearby_cities}
 
-    # Extract top N cities by station count
-    top_cities = sorted(cities, key=lambda c: c["station_count"], reverse=True)[
-        :top_cities_count
-    ]
-    top_city_ids = {c["id"] for c in top_cities}
+        # Update display names for nearby cities to show distance
+        for city in nearby_cities:
+            city_id = city["id"]
+            station_count = city.get("station_count", 0)
+            distance_km = city.get("distance_km", 0)
+            city_name_he = city.get("name_he", city_id)
 
-    # Get remaining cities (excluding top cities), already sorted by Hebrew name
-    remaining_cities = [c for c in cities if c["id"] not in top_city_ids]
+            # Format with distance indicator
+            if city_name_he and city_name_he != city_id:
+                city["name"] = f"📍 {city_id} / {city_name_he} (~{distance_km:.0f} km)"
+            else:
+                city["name"] = f"📍 {city_id} (~{distance_km:.0f} km)"
 
-    # Combine: top cities first (sorted by size), then remaining (sorted by Hebrew)
-    top_cities.sort(key=lambda c: c["station_count"], reverse=True)
-    result = top_cities + remaining_cities
+        # Get remaining cities (excluding nearby ones), sort alphabetically by Hebrew
+        remaining_cities = [c for c in cities if c["id"] not in nearby_city_ids]
+        remaining_cities.sort(key=lambda c: c["name_he"])
+
+        # Combine: nearby cities first, then all others alphabetically
+        result = nearby_cities + remaining_cities
+    else:
+        # No coordinates provided - just sort alphabetically by Hebrew name
+        cities.sort(key=lambda c: c["name_he"])
+        result = cities
 
     # Limit to max_cities
     return result[:max_cities]

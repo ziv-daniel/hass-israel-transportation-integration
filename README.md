@@ -43,7 +43,7 @@ A comprehensive Home Assistant integration for monitoring Israeli public transpo
 ### Manual Installation
 
 1. Download the latest release from the [releases page](https://github.com/ziv-daniel/hass-israel-transportation-integration/releases)
-2. Extract the `custom_components/silent_bus` folder
+2. Extract the `custom_components/israel_transportation` folder
 3. Copy it to your Home Assistant `custom_components` directory
 4. Restart Home Assistant
 
@@ -279,7 +279,7 @@ automation:
         entity_id: binary_sensor.front_door
         to: "on"
     action:
-      - service: silent_bus.refresh_data
+      - service: israel_transportation.refresh_data
         data:
           entity_id: sensor.bus_station_azrieli_center_line_249
 ```
@@ -295,7 +295,7 @@ automation:
       - platform: time
         at: "07:00:00"
     action:
-      - service: silent_bus.update_lines
+      - service: israel_transportation.update_lines
         data:
           entity_id: sensor.bus_station_azrieli_center_line_249
           lines: "249, 40, 189"  # Morning express lines
@@ -305,7 +305,7 @@ automation:
       - platform: time
         at: "17:00:00"
     action:
-      - service: silent_bus.update_lines
+      - service: israel_transportation.update_lines
         data:
           entity_id: sensor.bus_station_azrieli_center_line_249
           lines: "249, 40, 605"  # Evening lines
@@ -319,7 +319,7 @@ Create a script to check if you need to hurry:
 script:
   check_bus_status:
     sequence:
-      - service: silent_bus.refresh_data
+      - service: israel_transportation.refresh_data
       - delay:
           seconds: 2
       - choose:
@@ -350,7 +350,7 @@ For more examples including train and light rail configurations, see [examples/c
 
 The integration provides custom services for advanced automation scenarios:
 
-### `silent_bus.refresh_data`
+### `israel_transportation.refresh_data`
 
 Force an immediate refresh of arrival times data. Useful when you want the latest information before making a decision.
 
@@ -359,12 +359,12 @@ Force an immediate refresh of arrival times data. Useful when you want the lates
 
 **Example:**
 ```yaml
-service: silent_bus.refresh_data
+service: israel_transportation.refresh_data
 data:
   entity_id: sensor.bus_station_azrieli_center_line_249
 ```
 
-### `silent_bus.update_lines`
+### `israel_transportation.update_lines`
 
 Dynamically update the bus lines being tracked for a station. Perfect for adjusting monitored routes based on time of day or other conditions. Only works for bus and light rail sensors, not trains.
 
@@ -374,7 +374,7 @@ Dynamically update the bus lines being tracked for a station. Perfect for adjust
 
 **Example:**
 ```yaml
-service: silent_bus.update_lines
+service: israel_transportation.update_lines
 data:
   entity_id: sensor.bus_station_azrieli_center_line_249
   lines: "249, 40, 605"
@@ -451,7 +451,7 @@ pre-commit install
 pytest
 
 # Run with coverage
-pytest --cov=custom_components.silent_bus --cov-report=html
+pytest --cov=custom_components.israel_transportation --cov-report=html
 
 # Run specific test file
 pytest tests/unit/test_api.py

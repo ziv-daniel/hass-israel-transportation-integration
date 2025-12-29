@@ -9,14 +9,14 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
-from custom_components.silent_bus.api import (
+from custom_components.israel_transportation.api import (
     ApiConnectionError,
     ApiTimeoutError,
 )
-from custom_components.silent_bus.gov_api import (
+from custom_components.israel_transportation.gov_api import (
     ApiConnectionError as GovApiConnectionError,
 )
-from custom_components.silent_bus.const import (
+from custom_components.israel_transportation.const import (
     CONF_BUS_LINES,
     CONF_FROM_STATION,
     CONF_FROM_STATION_NAME,
@@ -115,7 +115,7 @@ async def test_bus_station_12664_validation(hass: HomeAssistant):
     correctly using the gov API.
     """
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         # Mock successful station lookup
         mock_client.return_value.get_station = AsyncMock(
@@ -159,7 +159,7 @@ async def test_bus_station_valid_common_stations(hass: HomeAssistant):
 
     for station_data in test_stations:
         with patch(
-            "custom_components.silent_bus.config_flow.GovApiClient"
+            "custom_components.israel_transportation.config_flow.GovApiClient"
         ) as mock_client:
             mock_client.return_value.get_station = AsyncMock(
                 return_value={
@@ -202,7 +202,7 @@ async def test_bus_station_invalid_rejected(hass: HomeAssistant):
     This tests the error handling when a station doesn't exist.
     """
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         # Mock station not found (Name is None, Makat is 0)
         mock_client.return_value.get_station = AsyncMock(
@@ -233,7 +233,7 @@ async def test_bus_station_api_timeout(hass: HomeAssistant):
     Ensures that connection errors are caught and displayed as user-friendly errors.
     """
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         # Mock API connection error
         mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
@@ -263,7 +263,7 @@ async def test_bus_station_empty_response(hass: HomeAssistant):
     This covers the edge case where the API responds but station is invalid.
     """
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         # Mock station not found response (Name is None, Makat is 0)
         mock_client.return_value.get_station = AsyncMock(
@@ -292,7 +292,7 @@ async def test_bus_lines_selection(hass: HomeAssistant):
     Verifies that users can configure multiple lines separated by commas.
     """
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Test Station", "Makat": 24068}
@@ -327,7 +327,7 @@ async def test_bus_lines_validation_required(hass: HomeAssistant):
     Empty or whitespace-only input should be rejected.
     """
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Test Station", "Makat": 24068}
@@ -370,7 +370,7 @@ async def test_train_station_valid_routes(hass: HomeAssistant):
     These are common train station IDs that should validate properly.
     """
     with patch(
-        "custom_components.silent_bus.config_flow.BusNearbyApiClient"
+        "custom_components.israel_transportation.config_flow.BusNearbyApiClient"
     ) as mock_client:
         # Mock search for both stations
         def mock_search(station_id):
@@ -405,7 +405,7 @@ async def test_train_station_invalid_rejected(hass: HomeAssistant):
     Invalid station IDs should fail validation.
     """
     with patch(
-        "custom_components.silent_bus.config_flow.BusNearbyApiClient"
+        "custom_components.israel_transportation.config_flow.BusNearbyApiClient"
     ) as mock_client:
         # Mock search returning empty for invalid stations
         mock_client.return_value.search_station = AsyncMock(return_value=[])
@@ -429,7 +429,7 @@ async def test_train_station_invalid_rejected(hass: HomeAssistant):
 async def test_train_api_timeout(hass: HomeAssistant):
     """Test graceful handling of API timeout during train station validation."""
     with patch(
-        "custom_components.silent_bus.config_flow.BusNearbyApiClient"
+        "custom_components.israel_transportation.config_flow.BusNearbyApiClient"
     ) as mock_client:
         mock_client.return_value.search_station = AsyncMock(
             side_effect=ApiTimeoutError("Request timed out")
@@ -452,7 +452,7 @@ async def test_train_api_timeout(hass: HomeAssistant):
 async def test_train_arrival_data_format(hass: HomeAssistant):
     """Test that train entry has correct data structure and attributes."""
     with patch(
-        "custom_components.silent_bus.config_flow.BusNearbyApiClient"
+        "custom_components.israel_transportation.config_flow.BusNearbyApiClient"
     ) as mock_client:
 
         def mock_search(station_id):
@@ -502,7 +502,7 @@ async def test_lightrail_station_validation(hass: HomeAssistant):
     Tests both Jerusalem light rail and Tel Aviv light rail stations.
     """
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Pisgat Ze'ev", "Makat": 30001}
@@ -531,7 +531,7 @@ async def test_lightrail_line_selection(hass: HomeAssistant):
     Light rail typically has fewer lines (e.g., 1, 2, 3 for Jerusalem).
     """
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Pisgat Ze'ev", "Makat": 30001}
@@ -564,7 +564,7 @@ async def test_lightrail_line_selection(hass: HomeAssistant):
 async def test_lightrail_api_response(hass: HomeAssistant):
     """Test that light rail configuration creates correct data structure."""
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         mock_client.return_value.get_station = AsyncMock(
             return_value={
@@ -661,7 +661,7 @@ async def test_already_configured_rejection(hass: HomeAssistant):
 
     # Try to add same station again
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Test Station", "Makat": 24068}
@@ -777,7 +777,7 @@ async def test_connection_error_handling(hass: HomeAssistant):
     GovApiConnectionError is caught and shown as cannot_connect error.
     """
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         # Test GovApiConnectionError
         mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
@@ -803,7 +803,7 @@ async def test_connection_error_handling(hass: HomeAssistant):
 async def test_station_id_whitespace_handling(hass: HomeAssistant):
     """Test that station IDs with whitespace are properly trimmed."""
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Test Station", "Makat": 24068}
@@ -831,10 +831,10 @@ async def test_station_id_whitespace_handling(hass: HomeAssistant):
 @pytest.mark.asyncio
 async def test_generic_exception_handling(hass: HomeAssistant):
     """Test handling of unexpected exceptions."""
-    from custom_components.silent_bus.const import ERROR_UNKNOWN
+    from custom_components.israel_transportation.const import ERROR_UNKNOWN
 
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         # Simulate unexpected exception
         mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)

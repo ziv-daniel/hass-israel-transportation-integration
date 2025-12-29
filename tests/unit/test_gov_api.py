@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
 import pytest
 
-from custom_components.silent_bus.gov_api import GovApiClient
+from custom_components.israel_transportation.gov_api import GovApiClient
 
 
 class TestGovApiClientInit:

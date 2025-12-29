@@ -141,7 +141,7 @@ pre-commit run --all-files
 pytest -v --tb=long
 
 # Check for import issues
-python -c "from custom_components.silent_bus import api, config_flow, coordinator, sensor"
+python -c "from custom_components.israel_transportation import api, config_flow, coordinator, sensor"
 ```
 
 ### Step 4: Verify & Push

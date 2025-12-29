@@ -1,10 +1,10 @@
-"""Constants for the Silent Bus integration."""
+"""Constants for the Israel Transportation integration."""
 
 from datetime import timedelta
 from typing import Final
 
 # Integration domain
-DOMAIN: Final = "silent_bus"
+DOMAIN: Final = "israel_transportation"
 
 # Configuration and options
 CONF_STATION_ID: Final = "station_id"

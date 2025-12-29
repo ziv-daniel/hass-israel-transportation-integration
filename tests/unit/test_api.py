@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import aiohttp
 import pytest
 
-from custom_components.silent_bus.api import (
+from custom_components.israel_transportation.api import (
     ApiConnectionError,
     ApiTimeoutError,
     BusNearbyApiClient,

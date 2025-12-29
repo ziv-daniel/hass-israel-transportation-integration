@@ -9,9 +9,9 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
-from custom_components.silent_bus.api import ApiConnectionError
-from custom_components.silent_bus.gov_api import ApiConnectionError as GovApiConnectionError
-from custom_components.silent_bus.const import (
+from custom_components.israel_transportation.api import ApiConnectionError
+from custom_components.israel_transportation.gov_api import ApiConnectionError as GovApiConnectionError
+from custom_components.israel_transportation.const import (
     CONF_BUS_LINES,
     CONF_STATION_ID,
     CONF_STATION_NAME,
@@ -36,13 +36,13 @@ async def test_user_form_display(hass: HomeAssistant):
 @pytest.mark.asyncio
 async def test_user_form_station_not_found(hass: HomeAssistant):
     """Test station not found error."""
-    from custom_components.silent_bus.const import (
+    from custom_components.israel_transportation.const import (
         CONF_TRANSPORT_TYPE,
         TRANSPORT_TYPE_BUS,
     )
 
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         # Mock station not found (Name is None, Makat is 0)
         mock_client.return_value.get_station = AsyncMock(
@@ -80,14 +80,14 @@ async def test_user_form_station_not_found(hass: HomeAssistant):
 @pytest.mark.asyncio
 async def test_user_form_cannot_connect(hass: HomeAssistant):
     """Test connection error is caught and shown as cannot_connect error."""
-    from custom_components.silent_bus.const import (
+    from custom_components.israel_transportation.const import (
         CONF_TRANSPORT_TYPE,
         TRANSPORT_TYPE_BUS,
         ERROR_CANNOT_CONNECT,
     )
 
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         # GovApiConnectionError is caught and shown as cannot_connect
         mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
@@ -126,13 +126,13 @@ async def test_user_form_cannot_connect(hass: HomeAssistant):
 @pytest.mark.asyncio
 async def test_user_form_success(hass: HomeAssistant):
     """Test successful station validation."""
-    from custom_components.silent_bus.const import (
+    from custom_components.israel_transportation.const import (
         CONF_TRANSPORT_TYPE,
         TRANSPORT_TYPE_BUS,
     )
 
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         # Mock valid station (Name is set, Makat is non-zero)
         mock_client.return_value.get_station = AsyncMock(
@@ -170,13 +170,13 @@ async def test_user_form_success(hass: HomeAssistant):
 @pytest.mark.asyncio
 async def test_bus_lines_form_no_lines(hass: HomeAssistant):
     """Test bus lines form with no lines entered."""
-    from custom_components.silent_bus.const import (
+    from custom_components.israel_transportation.const import (
         CONF_TRANSPORT_TYPE,
         TRANSPORT_TYPE_BUS,
     )
 
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Test Station", "Makat": 24068}
@@ -219,13 +219,13 @@ async def test_bus_lines_form_no_lines(hass: HomeAssistant):
 @pytest.mark.asyncio
 async def test_full_flow_success(hass: HomeAssistant):
     """Test complete successful flow."""
-    from custom_components.silent_bus.const import (
+    from custom_components.israel_transportation.const import (
         CONF_TRANSPORT_TYPE,
         TRANSPORT_TYPE_BUS,
     )
 
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Test Station", "Makat": 24068}
@@ -328,13 +328,13 @@ async def test_station_makat_used_directly(hass: HomeAssistant):
     With the gov API, users enter the makat (stop code displayed on bus stop signs)
     and the gov API accepts this directly without translation.
     """
-    from custom_components.silent_bus.const import (
+    from custom_components.israel_transportation.const import (
         CONF_TRANSPORT_TYPE,
         TRANSPORT_TYPE_BUS,
     )
 
     with patch(
-        "custom_components.silent_bus.config_flow.GovApiClient"
+        "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         # Gov API returns station info directly using makat
         mock_client.return_value.get_station = AsyncMock(

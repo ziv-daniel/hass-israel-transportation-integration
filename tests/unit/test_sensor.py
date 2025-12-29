@@ -1,4 +1,4 @@
-"""Tests for the Silent Bus sensor platform."""
+"""Tests for the Israel Transportation sensor platform."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from homeassistant.core import HomeAssistant
 
-from custom_components.silent_bus.sensor import SilentBusSensor
+from custom_components.israel_transportation.sensor import SilentBusSensor
 
 
 @pytest.mark.asyncio
@@ -145,7 +145,7 @@ async def test_sensor_unique_id(hass: HomeAssistant):
         line_number="249",
     )
 
-    assert sensor.unique_id == "silent_bus_24068_249"
+    assert sensor.unique_id == "israel_transportation_24068_249"
 
 
 @pytest.mark.asyncio
@@ -163,7 +163,7 @@ async def test_sensor_device_info(hass: HomeAssistant):
     device_info = sensor.device_info
 
     assert device_info["name"] == "Bus Station Test Station"
-    assert ("silent_bus", "24068") in device_info["identifiers"]
+    assert ("israel_transportation", "24068") in device_info["identifiers"]
 
 
 @pytest.mark.asyncio
