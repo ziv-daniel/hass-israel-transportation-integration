@@ -97,14 +97,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             from_station_name = entry.data[CONF_FROM_STATION_NAME]
             to_station_name = entry.data[CONF_TO_STATION_NAME]
 
-            # Validate stations
-            from_valid = await api_client.validate_station(from_station)
-            to_valid = await api_client.validate_station(to_station)
-
-            if not from_valid or not to_valid:
-                raise ConfigEntryNotReady(
-                    f"Train stations {from_station} or {to_station} are not accessible."
-                )
+            # Note: We skip BusNearby validation for trains because:
+            # 1. Train stations use Israel Railways codes (e.g., 7300 for Sderot)
+            # 2. BusNearby API uses different internal station IDs
+            # 3. Dropdown selections contain curated, known-valid station codes
+            # Validation will happen at first data fetch instead.
 
             # Create coordinator for train
             coordinator = SilentBusCoordinator(
