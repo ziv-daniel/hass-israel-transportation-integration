@@ -26,8 +26,8 @@ from .const import (
     ATTR_STATION_ID,
     ATTR_STATION_NAME,
     ATTR_UPCOMING_ARRIVALS,
-    ATTRIBUTION_BUSNEARBY,
     ATTRIBUTION_GOV,
+    ATTRIBUTION_RAIL,
     CONF_BUS_LINES,
     CONF_FROM_STATION,
     CONF_FROM_STATION_NAME,
@@ -309,7 +309,7 @@ class SilentBusTrainSensor(CoordinatorEntity, SensorEntity):
             "to_station": self._to_station,
             "from_station_name": self._from_station_name,
             "to_station_name": self._to_station_name,
-            ATTR_ATTRIBUTION: ATTRIBUTION_BUSNEARBY,
+            ATTR_ATTRIBUTION: ATTRIBUTION_RAIL,
             ATTR_LAST_UPDATE: datetime.now().isoformat(),
         }
 

@@ -75,6 +75,7 @@ ATTR_ATTRIBUTION: Final = "attribution"
 ATTRIBUTION: Final = "Data provided by Israel Ministry of Transportation"
 ATTRIBUTION_BUSNEARBY: Final = "Data provided by BusNearby"
 ATTRIBUTION_GOV: Final = "Data provided by Israel Ministry of Transportation"
+ATTRIBUTION_RAIL: Final = "Data provided by Israel Railways"
 
 # Error messages
 ERROR_STATION_NOT_FOUND: Final = "station_not_found"
