@@ -9,6 +9,8 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from israelrailapi import TrainSchedule
+
 from .api import BusNearbyApiClient, BusNearbyApiError
 from .gov_api import GovApiClient
 from .const import (
@@ -116,21 +118,28 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         """
         try:
             if self.transport_type == TRANSPORT_TYPE_TRAIN:
-                # Fetch train routes
+                # Fetch train routes using Israel Rail API
                 _LOGGER.debug(
-                    "Fetching train routes from %s to %s",
+                    "Fetching train routes from %s to %s using Israel Rail API",
                     self.from_station,
                     self.to_station,
                 )
 
-                itineraries = await self.api_client.get_train_routes(
-                    self.from_station,
-                    self.to_station,
-                    number_of_routes=self.max_arrivals,
-                )
+                try:
+                    # Query Israel Rail API (synchronous library, run in executor)
+                    routes = await self.hass.async_add_executor_job(
+                        TrainSchedule.query,
+                        self.from_station,
+                        self.to_station,
+                    )
 
-                # Process train routes
-                processed_data = self._process_train_routes(itineraries)
+                    # Process train routes
+                    processed_data = self._process_rail_routes(routes)
+
+                except Exception as err:
+                    raise UpdateFailed(
+                        f"Error fetching train data from Israel Rail API: {err}"
+                    ) from err
 
             else:
                 # Bus/Light Rail - use gov API if available, else BusNearby
@@ -252,66 +261,105 @@ class SilentBusCoordinator(DataUpdateCoordinator):
 
         return processed
 
-    def _process_train_routes(
-        self, itineraries: list[dict[str, Any]]
-    ) -> dict[str, Any]:
-        """Process train route itineraries into structured format.
+    def _process_rail_routes(self, routes: list) -> dict[str, Any]:
+        """Process train routes from Israel Rail API.
 
         Args:
-            itineraries: Raw itinerary data from API
+            routes: List of Route objects from israelrailapi
 
         Returns:
             Dictionary with route key mapping to processed departure data
         """
         processed: dict[str, list[dict[str, Any]]] = {}
         now = datetime.now()
+        route_key = "train_route"
 
-        route_key = "train_route"  # Single key for train routes
-
-        for idx, itinerary in enumerate(itineraries):
-            # Get departure time
-            start_time = itinerary.get("startTime")
-            if not start_time:
+        for idx, route in enumerate(routes[: self.max_arrivals]):
+            # Get trains from route
+            trains = route.trains if hasattr(route, "trains") else []
+            if not trains:
                 continue
 
-            # Convert to datetime (milliseconds timestamp)
-            departure_time = datetime.fromtimestamp(start_time / 1000)
+            first_train = trains[0]
+
+            # Parse departure time (format: "HH:MM")
+            dep_time_str = (
+                first_train.departure if hasattr(first_train, "departure") else None
+            )
+            if not dep_time_str:
+                continue
+
+            try:
+                dep_parts = dep_time_str.split(":")
+                departure_time = now.replace(
+                    hour=int(dep_parts[0]),
+                    minute=int(dep_parts[1]),
+                    second=0,
+                    microsecond=0,
+                )
+                # If time is in the past, it's tomorrow
+                if departure_time < now:
+                    departure_time = departure_time + timedelta(days=1)
+            except (ValueError, IndexError):
+                continue
 
             # Calculate minutes until departure
             time_delta = departure_time - now
             minutes_until = max(0, int(time_delta.total_seconds() / 60))
 
-            # Get duration
-            duration_seconds = itinerary.get("duration", 0)
-            duration_minutes = int(duration_seconds / 60)
-
-            # Extract route details (legs)
-            legs = itinerary.get("legs", [])
-            route_description = " → ".join(
-                [
-                    leg.get("to", {}).get("name", "Unknown")
-                    for leg in legs
-                    if leg.get("mode") == "RAIL"
-                ]
+            # Get platform and train number
+            platform = first_train.platform if hasattr(first_train, "platform") else ""
+            train_number = (
+                first_train.trainno if hasattr(first_train, "trainno") else ""
             )
 
-            # Create processed route entry
+            # Calculate total duration if multiple trains
+            duration_minutes = 0
+            last_train = trains[-1]
+            arr_time_str = (
+                last_train.arrival if hasattr(last_train, "arrival") else None
+            )
+            if arr_time_str:
+                try:
+                    arr_parts = arr_time_str.split(":")
+                    arrival_time = now.replace(
+                        hour=int(arr_parts[0]),
+                        minute=int(arr_parts[1]),
+                        second=0,
+                        microsecond=0,
+                    )
+                    if arrival_time < departure_time:
+                        arrival_time = arrival_time + timedelta(days=1)
+                    duration_minutes = int(
+                        (arrival_time - departure_time).total_seconds() / 60
+                    )
+                except (ValueError, IndexError):
+                    pass
+
+            # Build direction string from destinations
+            stops = [
+                t.destination if hasattr(t, "destination") else "" for t in trains
+            ]
+            direction = " → ".join(filter(None, stops)) or self.to_station_name
+
             processed_route = {
                 "arrival_time": departure_time.isoformat(),
                 "minutes_until": minutes_until,
                 "duration_minutes": duration_minutes,
-                "is_realtime": itinerary.get("realtime", False),
-                "direction": route_description or f"{self.to_station_name}",
+                "is_realtime": False,  # Israel Rail API doesn't provide real-time
+                "direction": direction,
+                "platform": platform,
+                "train_number": train_number,
                 "route_index": idx,
+                "transfers": len(trains) - 1,
             }
 
-            # Add to routes list
             if route_key not in processed:
                 processed[route_key] = []
 
             processed[route_key].append(processed_route)
 
-        # Sort routes by departure time
+        # Sort by departure time
         if route_key in processed:
             processed[route_key].sort(key=lambda x: x["minutes_until"])
 
