@@ -694,48 +694,36 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 if self._from_station == self._to_station:
                     errors["to_station"] = "cannot_be_same"
                 else:
-                    # Validate train route API response before creating entry
-                    try:
-                        async with aiohttp.ClientSession() as session:
-                            api_client = BusNearbyApiClient(session)
-                            (
-                                is_valid,
-                                error_msg,
-                            ) = await api_client.validate_train_route_api_response(
-                                self._from_station, self._to_station
-                            )
-                            if not is_valid:
-                                _LOGGER.error(
-                                    "Train route %s -> %s failed validation: %s",
-                                    self._from_station,
-                                    self._to_station,
-                                    error_msg,
-                                )
-                                errors["base"] = ERROR_INVALID_STATION_RESPONSE
-                            else:
-                                # Create entry for train
-                                await self.async_set_unique_id(
-                                    f"{self._from_station}_{self._to_station}"
-                                )
-                                self._abort_if_unique_id_configured()
+                    # Skip BusNearby API validation for dropdown selections
+                    # The dropdown contains known-valid Israel Railways station codes
+                    # BusNearby API doesn't understand rail codes (7300, 3600, etc.)
+                    # Validation is only needed for manual entry
+                    _LOGGER.debug(
+                        "Creating train route from dropdown: %s (%s) -> %s (%s)",
+                        self._from_station,
+                        self._from_station_name,
+                        self._to_station,
+                        self._to_station_name,
+                    )
 
-                                return self.async_create_entry(
-                                    title=f"{self._from_station_name} → {self._to_station_name}",
-                                    data={
-                                        CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN,
-                                        CONF_FROM_STATION: self._from_station,
-                                        CONF_TO_STATION: self._to_station,
-                                        CONF_FROM_STATION_NAME: self._from_station_name,
-                                        CONF_TO_STATION_NAME: self._to_station_name,
-                                        CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
-                                        CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
-                                    },
-                                )
-                    except ApiConnectionError:
-                        errors["base"] = ERROR_CANNOT_CONNECT
-                    except Exception as err:
-                        _LOGGER.exception("Failed to validate train route: %s", err)
-                        errors["base"] = ERROR_UNKNOWN
+                    # Create entry for train
+                    await self.async_set_unique_id(
+                        f"{self._from_station}_{self._to_station}"
+                    )
+                    self._abort_if_unique_id_configured()
+
+                    return self.async_create_entry(
+                        title=f"{self._from_station_name} → {self._to_station_name}",
+                        data={
+                            CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN,
+                            CONF_FROM_STATION: self._from_station,
+                            CONF_TO_STATION: self._to_station,
+                            CONF_FROM_STATION_NAME: self._from_station_name,
+                            CONF_TO_STATION_NAME: self._to_station_name,
+                            CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
+                            CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
+                        },
+                    )
 
         # Get train stations list (exclude the FROM station)
         stations_list = get_train_stations_list()
