@@ -9,7 +9,7 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from israelrailapi import TrainSchedule
+from israelrailapi.api import GetRoutesApi
 
 from .api import BusNearbyApiClient, BusNearbyApiError
 from .gov_api import GovApiClient
@@ -126,9 +126,9 @@ class SilentBusCoordinator(DataUpdateCoordinator):
                 )
 
                 try:
-                    # Query Israel Rail API (synchronous library, run in executor)
+                    # Query Israel Rail API directly (bypass buggy translate_station)
                     routes = await self.hass.async_add_executor_job(
-                        TrainSchedule.query,
+                        self._query_rail_api,
                         self.from_station,
                         self.to_station,
                     )
@@ -261,11 +261,36 @@ class SilentBusCoordinator(DataUpdateCoordinator):
 
         return processed
 
+    def _query_rail_api(self, from_station: str, to_station: str) -> list:
+        """Query Israel Rail API directly with station IDs.
+
+        This bypasses the buggy translate_station function in israelrailapi.
+
+        Args:
+            from_station: Origin station ID (e.g., '9600' for Sderot)
+            to_station: Destination station ID (e.g., '3700' for Tel Aviv Savidor)
+
+        Returns:
+            List of TrainRoute objects
+        """
+        import time
+
+        api = GetRoutesApi()
+        today = time.strftime("%Y-%m-%d")
+        current_hour = time.strftime("%H:%M")
+
+        return api.request(
+            fromStation=from_station,
+            toStation=to_station,
+            date=today,
+            hour=current_hour,
+        )
+
     def _process_rail_routes(self, routes: list) -> dict[str, Any]:
         """Process train routes from Israel Rail API.
 
         Args:
-            routes: List of Route objects from israelrailapi
+            routes: List of TrainRoute objects from israelrailapi
 
         Returns:
             Dictionary with route key mapping to processed departure data
@@ -282,7 +307,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
 
             first_train = trains[0]
 
-            # Parse departure time (format: "HH:MM")
+            # Parse departure time (ISO format: "2025-12-29T16:12:00")
             dep_time_str = (
                 first_train.departure if hasattr(first_train, "departure") else None
             )
@@ -290,30 +315,20 @@ class SilentBusCoordinator(DataUpdateCoordinator):
                 continue
 
             try:
-                dep_parts = dep_time_str.split(":")
-                departure_time = now.replace(
-                    hour=int(dep_parts[0]),
-                    minute=int(dep_parts[1]),
-                    second=0,
-                    microsecond=0,
-                )
-                # If time is in the past, it's tomorrow
-                if departure_time < now:
-                    departure_time = departure_time + timedelta(days=1)
-            except (ValueError, IndexError):
+                # Parse ISO datetime string
+                departure_time = datetime.fromisoformat(dep_time_str)
+            except (ValueError, TypeError):
                 continue
 
             # Calculate minutes until departure
             time_delta = departure_time - now
             minutes_until = max(0, int(time_delta.total_seconds() / 60))
 
-            # Get platform and train number
+            # Get platform and train number from raw data
             platform = first_train.platform if hasattr(first_train, "platform") else ""
-            train_number = (
-                first_train.trainno if hasattr(first_train, "trainno") else ""
-            )
+            train_number = first_train.data.get("trainNumber", "") if hasattr(first_train, "data") else ""
 
-            # Calculate total duration if multiple trains
+            # Calculate total duration
             duration_minutes = 0
             last_train = trains[-1]
             arr_time_str = (
@@ -321,26 +336,16 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             )
             if arr_time_str:
                 try:
-                    arr_parts = arr_time_str.split(":")
-                    arrival_time = now.replace(
-                        hour=int(arr_parts[0]),
-                        minute=int(arr_parts[1]),
-                        second=0,
-                        microsecond=0,
-                    )
-                    if arrival_time < departure_time:
-                        arrival_time = arrival_time + timedelta(days=1)
+                    arrival_time = datetime.fromisoformat(arr_time_str)
                     duration_minutes = int(
                         (arrival_time - departure_time).total_seconds() / 60
                     )
-                except (ValueError, IndexError):
+                except (ValueError, TypeError):
                     pass
 
-            # Build direction string from destinations
-            stops = [
-                t.destination if hasattr(t, "destination") else "" for t in trains
-            ]
-            direction = " → ".join(filter(None, stops)) or self.to_station_name
+            # Build direction string from destination station IDs
+            # Note: dst contains station ID, not name
+            direction = self.to_station_name or ""
 
             processed_route = {
                 "arrival_time": departure_time.isoformat(),
@@ -349,7 +354,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
                 "is_realtime": False,  # Israel Rail API doesn't provide real-time
                 "direction": direction,
                 "platform": platform,
-                "train_number": train_number,
+                "train_number": str(train_number),
                 "route_index": idx,
                 "transfers": len(trains) - 1,
             }
