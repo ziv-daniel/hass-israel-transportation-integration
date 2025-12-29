@@ -34,7 +34,7 @@ from .gtfs_loader import (
     get_stations_for_city,
     is_gtfs_data_available,
 )
-from .train_stations import get_train_stations_list
+from israelrailapi.train_station import station_name_to_id
 from .const import (
     CONF_BUS_LINES,
     CONF_FROM_STATION,
@@ -62,6 +62,24 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def get_train_stations_list() -> list[dict[str, str]]:
+    """Get train stations from israel-rail-api library.
+
+    Returns:
+        List of station dicts with id, name, and name_en keys
+    """
+    stations = []
+    for hebrew_name, station_id in station_name_to_id.items():
+        stations.append({
+            "id": str(station_id),
+            "name": f"{hebrew_name} ({station_id})",
+            "name_en": hebrew_name,  # Library only has Hebrew names
+        })
+    # Sort by name
+    stations.sort(key=lambda x: x["name"])
+    return stations
 
 
 class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
