@@ -38,7 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Technical
 - Added `scripts/israeli_cities.py` with comprehensive city mappings (100+ cities)
-- Added `custom_components/silent_bus/train_stations.py` with major train stations
+- Added `custom_components/israel_transportation/train_stations.py` with major train stations
 - Enhanced `extract_city_from_name()` with 5 pattern-matching strategies
 - Updated `get_cities_list()` to display bilingual names
 - Improved error handling in `get_stop_times()` API method
@@ -107,7 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Issue Tracker: https://github.com/ziv-daniel/hass-israel-transportation-integration/issues
 
 ### Note
-- The domain name `silent_bus` remains unchanged to maintain compatibility with existing installations
+- The domain name `israel_transportation` remains unchanged to maintain compatibility with existing installations
 - Existing users will see the updated name after upgrading
 
 ## [1.2.0] - 2025-12-25
@@ -121,8 +121,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Track light rail arrivals at stations
   - Automatic icon assignment (mdi:tram)
 - **Custom Services**: Two new automation services
-  - `silent_bus.refresh_data`: Force immediate refresh of arrival times
-  - `silent_bus.update_lines`: Dynamically update tracked bus lines
+  - `israel_transportation.refresh_data`: Force immediate refresh of arrival times
+  - `israel_transportation.update_lines`: Dynamically update tracked bus lines
 - **Entity Enhancements**:
   - Added `SensorDeviceClass.DURATION` for proper time-based sensor UI
   - Added `SensorStateClass.MEASUREMENT` for long-term statistics support

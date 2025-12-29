@@ -1,12 +1,12 @@
-# Silent Bus - Home Assistant Integration
+# Israel Transportation - Home Assistant Integration
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/release/ziv-daniel/Silent-bus-integration.svg?style=for-the-badge)](https://github.com/ziv-daniel/Silent-bus-integration/releases)
-[![License](https://img.shields.io/github/license/ziv-daniel/Silent-bus-integration.svg?style=for-the-badge)](LICENSE)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
+[![GitHub Release](https://img.shields.io/github/release/ziv-daniel/hass-israel-transportation-integration.svg?style=for-the-badge&color=blue)](https://github.com/ziv-daniel/hass-israel-transportation-integration/releases)
+[![License](https://img.shields.io/github/license/ziv-daniel/hass-israel-transportation-integration.svg?style=for-the-badge&color=blue)](LICENSE)
 
-[![hassfest](https://img.shields.io/github/actions/workflow/status/ziv-daniel/Silent-bus-integration/hassfest.yaml?branch=main&label=hassfest&style=flat-square)](https://github.com/ziv-daniel/Silent-bus-integration/actions/workflows/hassfest.yaml)
-[![HACS](https://img.shields.io/github/actions/workflow/status/ziv-daniel/Silent-bus-integration/hacs.yaml?branch=main&label=HACS&style=flat-square)](https://github.com/ziv-daniel/Silent-bus-integration/actions/workflows/hacs.yaml)
-[![Tests](https://img.shields.io/github/actions/workflow/status/ziv-daniel/Silent-bus-integration/test.yaml?branch=main&label=tests&style=flat-square)](https://github.com/ziv-daniel/Silent-bus-integration/actions/workflows/test.yaml)
+[![hassfest](https://img.shields.io/github/actions/workflow/status/ziv-daniel/hass-israel-transportation-integration/hassfest.yaml?branch=main&label=hassfest&style=flat-square)](https://github.com/ziv-daniel/hass-israel-transportation-integration/actions/workflows/hassfest.yaml)
+[![HACS](https://img.shields.io/github/actions/workflow/status/ziv-daniel/hass-israel-transportation-integration/hacs.yaml?branch=main&label=HACS&style=flat-square)](https://github.com/ziv-daniel/hass-israel-transportation-integration/actions/workflows/hacs.yaml)
+[![Tests](https://img.shields.io/github/actions/workflow/status/ziv-daniel/hass-israel-transportation-integration/test.yaml?branch=main&label=tests&style=flat-square)](https://github.com/ziv-daniel/hass-israel-transportation-integration/actions/workflows/test.yaml)
 
 A comprehensive Home Assistant integration for monitoring Israeli public transportation in real-time. Track buses, trains, and light rail with live arrival times and get notified when your ride is approaching.
 
@@ -33,17 +33,17 @@ A comprehensive Home Assistant integration for monitoring Israeli public transpo
 2. Click on "Integrations"
 3. Click the three dots in the top right corner
 4. Select "Custom repositories"
-5. Add this repository URL: `https://github.com/ziv-daniel/Silent-bus-integration`
+5. Add this repository URL: `https://github.com/ziv-daniel/hass-israel-transportation-integration`
 6. Select category: "Integration"
 7. Click "Add"
-8. Find "Silent Bus" in the integrations list
+8. Find "Israel Transportation" in the integrations list
 9. Click "Download"
 10. Restart Home Assistant
 
 ### Manual Installation
 
-1. Download the latest release from the [releases page](https://github.com/ziv-daniel/Silent-bus-integration/releases)
-2. Extract the `custom_components/silent_bus` folder
+1. Download the latest release from the [releases page](https://github.com/ziv-daniel/hass-israel-transportation-integration/releases)
+2. Extract the `custom_components/israel_transportation` folder
 3. Copy it to your Home Assistant `custom_components` directory
 4. Restart Home Assistant
 
@@ -53,7 +53,7 @@ A comprehensive Home Assistant integration for monitoring Israeli public transpo
 
 1. Go to **Settings** → **Devices & Services**
 2. Click **Add Integration**
-3. Search for **Silent Bus**
+3. Search for **Israel Transportation**
 4. Follow the configuration steps:
    - **Step 1**: Select transport type (Bus, Train, or Light Rail)
    - **For Buses/Light Rail**:
@@ -279,7 +279,7 @@ automation:
         entity_id: binary_sensor.front_door
         to: "on"
     action:
-      - service: silent_bus.refresh_data
+      - service: israel_transportation.refresh_data
         data:
           entity_id: sensor.bus_station_azrieli_center_line_249
 ```
@@ -295,7 +295,7 @@ automation:
       - platform: time
         at: "07:00:00"
     action:
-      - service: silent_bus.update_lines
+      - service: israel_transportation.update_lines
         data:
           entity_id: sensor.bus_station_azrieli_center_line_249
           lines: "249, 40, 189"  # Morning express lines
@@ -305,7 +305,7 @@ automation:
       - platform: time
         at: "17:00:00"
     action:
-      - service: silent_bus.update_lines
+      - service: israel_transportation.update_lines
         data:
           entity_id: sensor.bus_station_azrieli_center_line_249
           lines: "249, 40, 605"  # Evening lines
@@ -319,7 +319,7 @@ Create a script to check if you need to hurry:
 script:
   check_bus_status:
     sequence:
-      - service: silent_bus.refresh_data
+      - service: israel_transportation.refresh_data
       - delay:
           seconds: 2
       - choose:
@@ -350,31 +350,31 @@ For more examples including train and light rail configurations, see [examples/c
 
 The integration provides custom services for advanced automation scenarios:
 
-### `silent_bus.refresh_data`
+### `israel_transportation.refresh_data`
 
 Force an immediate refresh of arrival times data. Useful when you want the latest information before making a decision.
 
 **Parameters:**
-- `entity_id` (optional): Specific entity to refresh. If not provided, all Silent Bus integrations will be refreshed.
+- `entity_id` (optional): Specific entity to refresh. If not provided, all Israel Transportation entities will be refreshed.
 
 **Example:**
 ```yaml
-service: silent_bus.refresh_data
+service: israel_transportation.refresh_data
 data:
   entity_id: sensor.bus_station_azrieli_center_line_249
 ```
 
-### `silent_bus.update_lines`
+### `israel_transportation.update_lines`
 
 Dynamically update the bus lines being tracked for a station. Perfect for adjusting monitored routes based on time of day or other conditions. Only works for bus and light rail sensors, not trains.
 
 **Parameters:**
-- `entity_id` (required): The Silent Bus entity to update
+- `entity_id` (required): The Israel Transportation entity to update
 - `lines` (required): Comma-separated list of bus line numbers
 
 **Example:**
 ```yaml
-service: silent_bus.update_lines
+service: israel_transportation.update_lines
 data:
   entity_id: sensor.bus_station_azrieli_center_line_249
   lines: "249, 40, 605"
@@ -433,8 +433,8 @@ This integration uses the [BusNearby API](https://app.busnearby.co.il), which pr
 
 ```bash
 # Clone the repository
-git clone https://github.com/ziv-daniel/Silent-bus-integration.git
-cd Silent-bus-integration
+git clone https://github.com/ziv-daniel/hass-israel-transportation-integration.git
+cd hass-israel-transportation-integration
 
 # Install development dependencies
 pip install -r requirements_test.txt
@@ -451,7 +451,7 @@ pre-commit install
 pytest
 
 # Run with coverage
-pytest --cov=custom_components.silent_bus --cov-report=html
+pytest --cov=custom_components.israel_transportation --cov-report=html
 
 # Run specific test file
 pytest tests/unit/test_api.py
@@ -506,8 +506,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- 🐛 **Report bugs**: [GitHub Issues](https://github.com/ziv-daniel/Silent-bus-integration/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/ziv-daniel/Silent-bus-integration/discussions)
+- 🐛 **Report bugs**: [GitHub Issues](https://github.com/ziv-daniel/hass-israel-transportation-integration/issues)
+- 💬 **Discussions**: [GitHub Discussions](https://github.com/ziv-daniel/hass-israel-transportation-integration/discussions)
 - 📖 **Documentation**: [Integration Plan](INTEGRATION_PLAN.md)
 
 ## Changelog

@@ -11,17 +11,30 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import (
     ApiConnectionError,
     BusNearbyApiClient,
+    InvalidResponseError,
 )
+from .gov_api import GovApiClient, ApiConnectionError as GovApiConnectionError
+from homeassistant.helpers.selector import (
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
+
 from .gtfs_loader import (
+    async_load_cities_index,
+    get_all_cities_list,
     get_cities_list,
+    get_cities_near_location,
     get_stations_for_city,
     is_gtfs_data_available,
 )
-from .train_stations import get_train_stations_list
+from israelrailapi.train_station import STATIONS as RAIL_STATIONS
 from .const import (
     CONF_BUS_LINES,
     CONF_FROM_STATION,
@@ -37,6 +50,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     ERROR_CANNOT_CONNECT,
+    ERROR_INVALID_STATION_RESPONSE,
     ERROR_STATION_NOT_FOUND,
     ERROR_UNKNOWN,
     MAX_SCAN_INTERVAL,
@@ -48,6 +62,26 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def get_train_stations_list() -> list[dict[str, str]]:
+    """Get train stations from israel-rail-api library.
+
+    Returns:
+        List of station dicts with id, name, and name_en keys
+    """
+    stations = []
+    for station_id, names in RAIL_STATIONS.items():
+        hebrew_name = names.get("Heb", "")
+        english_name = names.get("Eng", hebrew_name)
+        stations.append({
+            "id": str(station_id),
+            "name": f"{hebrew_name} - {english_name} ({station_id})",
+            "name_en": english_name,
+        })
+    # Sort by Hebrew name
+    stations.sort(key=lambda x: x["name"])
+    return stations
 
 
 class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -120,6 +154,12 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         Returns:
             Flow result
         """
+        # Pre-load GTFS data asynchronously to avoid blocking I/O warnings
+        try:
+            await async_load_cities_index()
+        except FileNotFoundError:
+            pass  # Will be handled by is_gtfs_data_available() check below
+
         if user_input is not None:
             selection_method = user_input["selection_method"]
 
@@ -161,9 +201,13 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             }
             default_method = "manual"
 
-        data_schema = vol.Schema({
-            vol.Required("selection_method", default=default_method): vol.In(options),
-        })
+        data_schema = vol.Schema(
+            {
+                vol.Required("selection_method", default=default_method): vol.In(
+                    options
+                ),
+            }
+        )
 
         return self.async_show_form(
             step_id="station_selection_method",
@@ -180,6 +224,12 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Handle city selection from GTFS data.
 
+        Shows cities filtered and sorted:
+        - Nearby cities first (based on Home Assistant home location)
+        - Then top 3 largest cities
+        - Then remaining cities sorted א-ת (Hebrew alphabetical)
+        - Only cities with 50+ stations are shown
+
         Args:
             user_input: User input data
 
@@ -191,33 +241,143 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             city_id = user_input["city_id"]
 
-            # Handle manual entry fallback
+            # Handle special options
             if city_id == "manual":
                 return await self.async_step_station_config()
+            if city_id == "show_all":
+                return await self.async_step_select_city_all()
 
             # Save selected city and move to station selection
             self._selected_city = city_id
             return await self.async_step_select_station()
 
-        # Get cities from GTFS data
-        cities = get_cities_list()
+        # Get home location for proximity sorting
+        home_lat = self.hass.config.latitude
+        home_lon = self.hass.config.longitude
+
+        # Get cities list - shows 3 closest first (if coordinates available), then all others alphabetically
+        # No filtering by min_stations - shows ALL cities
+        cities = get_cities_list(home_lat=home_lat, home_lon=home_lon)
 
         if not cities:
             # No GTFS data available, fall back to manual entry
             return await self.async_step_station_config()
 
-        # Build city options dictionary
-        city_options = {city['id']: city['name'] for city in cities}
+        # Build city options list for SelectSelector
+        city_options: list[SelectOptionDict] = []
 
-        # Add manual entry fallback option
-        city_options["manual"] = "🔍 Enter station ID manually..."
+        # Add all cities (already sorted: nearby first with 📍, then alphabetical)
+        for city in cities:
+            city_options.append(
+                SelectOptionDict(
+                    value=city["id"],
+                    label=city["name"],
+                )
+            )
 
-        data_schema = vol.Schema({
-            vol.Required("city_id"): vol.In(city_options),
-        })
+        # Add special options at the end
+        city_options.append(
+            SelectOptionDict(
+                value="show_all",
+                label="📋 Show all cities...",
+            )
+        )
+        city_options.append(
+            SelectOptionDict(
+                value="manual",
+                label="🔍 Enter station ID manually...",
+            )
+        )
+
+        # Use SelectSelector with dropdown mode for searchable list
+        data_schema = vol.Schema(
+            {
+                vol.Required(
+                    "city_id",
+                    default=suggested_city["id"] if suggested_city else None,
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=city_options,
+                        mode=SelectSelectorMode.DROPDOWN,
+                        custom_value=False,
+                        sort=False,  # We already sorted it ourselves
+                    )
+                ),
+            }
+        )
 
         return self.async_show_form(
             step_id="select_city",
+            data_schema=data_schema,
+            errors=errors,
+            description_placeholders={
+                "transport_type": TRANSPORT_TYPE_LABELS.get(
+                    self._transport_type, "transportation"
+                ).lower(),
+            },
+        )
+
+    async def async_step_select_city_all(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Handle selection from ALL cities (no filtering).
+
+        Args:
+            user_input: User input data
+
+        Returns:
+            Flow result
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            city_id = user_input["city_id"]
+
+            if city_id == "manual":
+                return await self.async_step_station_config()
+
+            self._selected_city = city_id
+            return await self.async_step_select_station()
+
+        # Get ALL cities (no minimum station filter)
+        cities = get_all_cities_list()
+
+        if not cities:
+            return await self.async_step_station_config()
+
+        # Build options list
+        city_options: list[SelectOptionDict] = []
+        for city in cities:
+            city_options.append(
+                SelectOptionDict(
+                    value=city["id"],
+                    label=city["name"],
+                )
+            )
+
+        # Add manual entry option
+        city_options.append(
+            SelectOptionDict(
+                value="manual",
+                label="🔍 Enter station ID manually...",
+            )
+        )
+
+        data_schema = vol.Schema(
+            {
+                vol.Required("city_id"): SelectSelector(
+                    SelectSelectorConfig(
+                        options=city_options,
+                        mode=SelectSelectorMode.DROPDOWN,
+                        custom_value=False,
+                        sort=False,
+                    )
+                ),
+            }
+        )
+
+        return self.async_show_form(
+            step_id="select_city_all",
             data_schema=data_schema,
             errors=errors,
             description_placeholders={
@@ -249,14 +409,63 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Get station details from GTFS data
             stations = get_stations_for_city(self._selected_city)
-            selected_station = next((s for s in stations if s['id'] == station_id), None)
+            selected_station = next(
+                (s for s in stations if s["id"] == station_id), None
+            )
 
             if selected_station:
-                self._station_id = station_id
-                self._station_name = selected_station['name']
+                self._station_name = selected_station["name"]
 
-                # Move to bus lines selection
-                return await self.async_step_bus_lines()
+                # Validate and resolve actual stop_id via API
+                # GTFS data may use stop_code (shown on signs) instead of stop_id
+                try:
+                    async with aiohttp.ClientSession() as session:
+                        api_client = BusNearbyApiClient(session)
+
+                        # Try to find the station via API to get correct stop_id
+                        try:
+                            api_stations = await api_client.search_station(station_id)
+                            if api_stations:
+                                # Use stop_id from API result
+                                actual_stop_id = api_stations[0].get(
+                                    "stop_id", api_stations[0].get("id", station_id)
+                                )
+                                _LOGGER.debug(
+                                    "GTFS station lookup: gtfs_id=%s -> stop_id=%s",
+                                    station_id,
+                                    actual_stop_id,
+                                )
+                            else:
+                                # Fallback to GTFS ID if API search fails
+                                actual_stop_id = station_id
+                        except Exception:
+                            actual_stop_id = station_id
+
+                        self._station_id = actual_stop_id
+
+                        # Validate API response format
+                        (
+                            is_valid,
+                            error_msg,
+                        ) = await api_client.validate_station_api_response(
+                            actual_stop_id
+                        )
+                        if not is_valid:
+                            _LOGGER.error(
+                                "Station %s (gtfs: %s) failed API validation: %s",
+                                actual_stop_id,
+                                station_id,
+                                error_msg,
+                            )
+                            errors["base"] = ERROR_INVALID_STATION_RESPONSE
+                        else:
+                            # Move to bus lines selection
+                            return await self.async_step_bus_lines()
+                except ApiConnectionError:
+                    errors["base"] = ERROR_CANNOT_CONNECT
+                except Exception:  # pylint: disable=broad-except
+                    _LOGGER.exception("Unexpected exception during API validation")
+                    errors["base"] = ERROR_UNKNOWN
             else:
                 errors["base"] = ERROR_STATION_NOT_FOUND
 
@@ -267,18 +476,39 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # No stations found, fall back to manual entry
             return await self.async_step_station_config()
 
-        # Build station options (limit to reasonable number for UI)
+        # Build station options with SelectSelector
         # Sort by name and take first 100 stations
-        sorted_stations = sorted(stations, key=lambda s: s['name'])[:100]
+        sorted_stations = sorted(stations, key=lambda s: s["name"])[:100]
 
-        station_options = {s['id']: s['name'] for s in sorted_stations}
+        station_options: list[SelectOptionDict] = []
+        for station in sorted_stations:
+            station_options.append(
+                SelectOptionDict(
+                    value=station["id"],
+                    label=f"{station['name']} ({station['id']})",
+                )
+            )
 
         # Add manual entry fallback
-        station_options["manual"] = "🔍 Enter station ID manually..."
+        station_options.append(
+            SelectOptionDict(
+                value="manual",
+                label="🔍 Enter station ID manually...",
+            )
+        )
 
-        data_schema = vol.Schema({
-            vol.Required("station_id"): vol.In(station_options),
-        })
+        data_schema = vol.Schema(
+            {
+                vol.Required("station_id"): SelectSelector(
+                    SelectSelectorConfig(
+                        options=station_options,
+                        mode=SelectSelectorMode.DROPDOWN,
+                        custom_value=False,
+                        sort=False,  # Already sorted alphabetically
+                    )
+                ),
+            }
+        )
 
         return self.async_show_form(
             step_id="select_station",
@@ -306,32 +536,39 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             station_id = user_input[CONF_STATION_ID].strip()
 
-            # Validate and get station info in one call (Phase 1 fix)
+            # Validate station directly with gov API (no translation needed)
             try:
-                async with aiohttp.ClientSession() as session:
-                    api_client = BusNearbyApiClient(session)
+                async with GovApiClient(
+                    async_get_clientsession(self.hass)
+                ) as gov_client:
+                    # Validate station directly with gov API
+                    station_info = await gov_client.get_station(station_id)
 
-                    # Validate and get station name using search endpoint
-                    try:
-                        stations = await api_client.search_station(station_id)
-                        if not stations or len(stations) == 0:
-                            errors["base"] = ERROR_STATION_NOT_FOUND
-                        else:
-                            # Get station name from search results
-                            self._station_name = stations[0].get(
-                                "name", f"Station {station_id}"
-                            )
-                            self._station_id = station_id
-
-                            # Move to next step
-                            return await self.async_step_bus_lines()
-                    except Exception:
+                    if (
+                        station_info.get("Name") is None
+                        or station_info.get("Makat", 0) == 0
+                    ):
                         errors["base"] = ERROR_STATION_NOT_FOUND
+                    else:
+                        # Station is valid - use Makat directly
+                        self._station_id = station_id
+                        self._station_name = station_info.get(
+                            "Name", f"Station {station_id}"
+                        )
 
-            except ApiConnectionError:
+                        _LOGGER.info(
+                            "Station validated: makat=%s, name=%s",
+                            self._station_id,
+                            self._station_name,
+                        )
+
+                        # Move to next step
+                        return await self.async_step_bus_lines()
+
+            except GovApiConnectionError:
                 errors["base"] = ERROR_CANNOT_CONNECT
             except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception")
+                _LOGGER.exception("Unexpected exception during station validation")
                 errors["base"] = ERROR_UNKNOWN
 
         # Show form
@@ -373,11 +610,17 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Get station names from train stations list
             stations_list = get_train_stations_list()
-            station = next((s for s in stations_list if s['id'] == station_id), None)
+            station = next((s for s in stations_list if s["id"] == station_id), None)
 
             if station:
+                self._from_station_name = station["name_en"]
+                # Use rail station code directly - the train API expects rail codes
                 self._from_station = station_id
-                self._from_station_name = station['name_en']
+                _LOGGER.debug(
+                    "Train FROM station: rail_code=%s, name=%s",
+                    station_id,
+                    station["name_en"],
+                )
 
                 # Move to TO station selection
                 return await self.async_step_train_select_to()
@@ -387,14 +630,16 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Get train stations list
         stations_list = get_train_stations_list()
-        station_options = {s['id']: s['name'] for s in stations_list}
+        station_options = {s["id"]: s["name"] for s in stations_list}
 
         # Add manual entry option
         station_options["manual"] = "🔍 Enter station ID manually..."
 
-        data_schema = vol.Schema({
-            vol.Required("from_station"): vol.In(station_options),
-        })
+        data_schema = vol.Schema(
+            {
+                vol.Required("from_station"): vol.In(station_options),
+            }
+        )
 
         return self.async_show_form(
             step_id="train_select_from",
@@ -426,18 +671,38 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             # Get station names from train stations list
             stations_list = get_train_stations_list()
-            station = next((s for s in stations_list if s['id'] == station_id), None)
+            station = next((s for s in stations_list if s["id"] == station_id), None)
 
             if station:
+                self._to_station_name = station["name_en"]
+                # Use rail station code directly - the train API expects rail codes
                 self._to_station = station_id
-                self._to_station_name = station['name_en']
+                _LOGGER.debug(
+                    "Train TO station: rail_code=%s, name=%s",
+                    station_id,
+                    station["name_en"],
+                )
 
                 # Validate: FROM and TO must be different
                 if self._from_station == self._to_station:
                     errors["to_station"] = "cannot_be_same"
                 else:
+                    # Skip BusNearby API validation for dropdown selections
+                    # The dropdown contains known-valid Israel Railways station codes
+                    # BusNearby API doesn't understand rail codes (7300, 3600, etc.)
+                    # Validation is only needed for manual entry
+                    _LOGGER.debug(
+                        "Creating train route from dropdown: %s (%s) -> %s (%s)",
+                        self._from_station,
+                        self._from_station_name,
+                        self._to_station,
+                        self._to_station_name,
+                    )
+
                     # Create entry for train
-                    await self.async_set_unique_id(f"{self._from_station}_{self._to_station}")
+                    await self.async_set_unique_id(
+                        f"{self._from_station}_{self._to_station}"
+                    )
                     self._abort_if_unique_id_configured()
 
                     return self.async_create_entry(
@@ -456,17 +721,19 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Get train stations list (exclude the FROM station)
         stations_list = get_train_stations_list()
         station_options = {
-            s['id']: s['name']
+            s["id"]: s["name"]
             for s in stations_list
-            if s['id'] != self._from_station  # Exclude FROM station
+            if s["id"] != self._from_station  # Exclude FROM station
         }
 
         # Add manual entry option
         station_options["manual"] = "🔍 Enter station ID manually..."
 
-        data_schema = vol.Schema({
-            vol.Required("to_station"): vol.In(station_options),
-        })
+        data_schema = vol.Schema(
+            {
+                vol.Required("to_station"): vol.In(station_options),
+            }
+        )
 
         return self.async_show_form(
             step_id="train_select_to",
@@ -474,7 +741,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={
                 "from_station": self._from_station_name,
-                "train_help": f"Select the destination (TO) train station from {self._from_station_name}"
+                "train_help": f"Select the destination (TO) train station from {self._from_station_name}",
             },
         )
 
@@ -518,22 +785,48 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             self._from_station = from_station
                             self._to_station = to_station
 
-                            # Create entry for train
-                            await self.async_set_unique_id(f"{from_station}_{to_station}")
-                            self._abort_if_unique_id_configured()
-
-                            return self.async_create_entry(
-                                title=f"{self._from_station_name} → {self._to_station_name}",
-                                data={
-                                    CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN,
-                                    CONF_FROM_STATION: self._from_station,
-                                    CONF_TO_STATION: self._to_station,
-                                    CONF_FROM_STATION_NAME: self._from_station_name,
-                                    CONF_TO_STATION_NAME: self._to_station_name,
-                                    CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
-                                    CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
-                                },
+                            # Validate API response format before proceeding
+                            (
+                                is_valid,
+                                error_msg,
+                            ) = await api_client.validate_train_route_api_response(
+                                from_station, to_station
                             )
+                            if not is_valid:
+                                _LOGGER.error(
+                                    "Train route %s → %s failed API validation: %s",
+                                    from_station,
+                                    to_station,
+                                    error_msg,
+                                )
+                                errors["base"] = ERROR_INVALID_STATION_RESPONSE
+                            else:
+                                # Create entry for train
+                                await self.async_set_unique_id(
+                                    f"{from_station}_{to_station}"
+                                )
+                                self._abort_if_unique_id_configured()
+
+                                return self.async_create_entry(
+                                    title=f"{self._from_station_name} → {self._to_station_name}",
+                                    data={
+                                        CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN,
+                                        CONF_FROM_STATION: self._from_station,
+                                        CONF_TO_STATION: self._to_station,
+                                        CONF_FROM_STATION_NAME: self._from_station_name,
+                                        CONF_TO_STATION_NAME: self._to_station_name,
+                                        CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
+                                        CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
+                                    },
+                                )
+                    except InvalidResponseError as err:
+                        _LOGGER.error(
+                            "Train route %s → %s has invalid API response: %s",
+                            from_station,
+                            to_station,
+                            err,
+                        )
+                        errors["base"] = ERROR_INVALID_STATION_RESPONSE
                     except Exception:
                         errors["base"] = ERROR_STATION_NOT_FOUND
 

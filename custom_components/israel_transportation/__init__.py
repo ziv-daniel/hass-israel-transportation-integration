@@ -14,7 +14,8 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import ApiConnectionError, BusNearbyApiClient
+from .api import ApiConnectionError
+from .gov_api import GovApiClient
 from .const import (
     CONF_BUS_LINES,
     CONF_FROM_STATION,
@@ -83,32 +84,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Convert update interval to timedelta
     update_interval = timedelta(seconds=update_interval_seconds)
 
-    # Create API client
-    session = async_get_clientsession(hass)
-    api_client = BusNearbyApiClient(session)
-
     # Validate connection and create coordinator based on transport type
+    session = async_get_clientsession(hass)
+
     try:
         if transport_type == TRANSPORT_TYPE_TRAIN:
-            # Train configuration
+            # Train configuration - uses Israel Rail API directly (no BusNearby)
             from_station = entry.data[CONF_FROM_STATION]
             to_station = entry.data[CONF_TO_STATION]
             from_station_name = entry.data[CONF_FROM_STATION_NAME]
             to_station_name = entry.data[CONF_TO_STATION_NAME]
 
-            # Validate stations
-            from_valid = await api_client.validate_station(from_station)
-            to_valid = await api_client.validate_station(to_station)
-
-            if not from_valid or not to_valid:
-                raise ConfigEntryNotReady(
-                    f"Train stations {from_station} or {to_station} are not accessible."
-                )
-
-            # Create coordinator for train
+            # Create coordinator for train (uses israelrailapi library internally)
             coordinator = SilentBusCoordinator(
                 hass=hass,
-                api_client=api_client,
                 update_interval=update_interval,
                 config_entry=entry,
                 transport_type=transport_type,
@@ -120,22 +109,25 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
 
         else:
-            # Bus/Light Rail configuration
+            # Bus/Light Rail configuration - use gov API
             station_id = entry.data[CONF_STATION_ID]
             station_name = entry.data[CONF_STATION_NAME]
             bus_lines = entry.data[CONF_BUS_LINES]
 
-            # Validate station
-            is_valid = await api_client.validate_station(station_id)
+            # Create gov API client
+            gov_api_client = GovApiClient(session)
+
+            # Validate station with gov API
+            is_valid = await gov_api_client.validate_station(station_id)
             if not is_valid:
                 raise ConfigEntryNotReady(
                     f"Station {station_id} is not accessible. Please check your configuration."
                 )
 
-            # Create coordinator for bus/light rail
+            # Create coordinator for bus/light rail with gov API
             coordinator = SilentBusCoordinator(
                 hass=hass,
-                api_client=api_client,
+                gov_api_client=gov_api_client,
                 update_interval=update_interval,
                 config_entry=entry,
                 transport_type=transport_type,
@@ -155,7 +147,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
-        "api_client": api_client,
     }
 
     # Set up platforms

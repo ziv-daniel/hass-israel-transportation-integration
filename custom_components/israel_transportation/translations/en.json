@@ -17,7 +17,14 @@
       },
       "select_city": {
         "title": "Select City",
-        "description": "Choose a city to see available {transport_type} stations",
+        "description": "Nearby cities are shown first based on your home location. Top cities by size are highlighted.",
+        "data": {
+          "city_id": "City"
+        }
+      },
+      "select_city_all": {
+        "title": "All Cities",
+        "description": "Browse all available cities sorted alphabetically (א-ת)",
         "data": {
           "city_id": "City"
         }
@@ -65,6 +72,7 @@
     "error": {
       "cannot_connect": "Failed to connect to the bus API. Please check your internet connection and try again.",
       "station_not_found": "Station not found. Please check the station number and try again.",
+      "invalid_station_response": "Station exists but returns invalid data format. This station may not be supported.",
       "no_lines": "Please enter at least one bus line number.",
       "unknown": "An unexpected error occurred. Please try again."
     },

@@ -9,7 +9,10 @@ from typing import Any
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from israelrailapi.api import GetRoutesApi
+
 from .api import BusNearbyApiClient, BusNearbyApiError
+from .gov_api import GovApiClient
 from .const import (
     APPROACHING_THRESHOLD,
     DEFAULT_MAX_ARRIVALS,
@@ -21,6 +24,7 @@ from .const import (
     TRANSPORT_TYPE_BUS,
     TRANSPORT_TYPE_TRAIN,
 )
+from .gtfs_loader import get_station_display_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,7 +35,9 @@ class SilentBusCoordinator(DataUpdateCoordinator):
     def __init__(
         self,
         hass: HomeAssistant,
-        api_client: BusNearbyApiClient,
+        *,
+        api_client: BusNearbyApiClient | None = None,  # Keep for trains
+        gov_api_client: GovApiClient | None = None,  # New for bus/light_rail
         update_interval: timedelta,
         config_entry=None,
         max_arrivals: int = DEFAULT_MAX_ARRIVALS,
@@ -50,7 +56,8 @@ class SilentBusCoordinator(DataUpdateCoordinator):
 
         Args:
             hass: Home Assistant instance
-            api_client: BusNearby API client
+            api_client: BusNearby API client (for trains)
+            gov_api_client: Government API client (for bus/light rail)
             update_interval: How often to update data
             config_entry: Config entry (optional, required for async_config_entry_first_refresh)
             max_arrivals: Maximum number of arrivals to track per line
@@ -64,6 +71,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             to_station_name: Destination station name (for trains)
         """
         self.api_client = api_client
+        self.gov_api_client = gov_api_client
         self.transport_type = transport_type
         self.max_arrivals = max_arrivals
         self._base_update_interval = update_interval
@@ -78,6 +86,12 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         self.to_station = to_station
         self.from_station_name = from_station_name
         self.to_station_name = to_station_name
+
+        # Generate display name for logging (includes city, station name, and ID)
+        if station_id:
+            self._station_display = get_station_display_name(station_id)
+        else:
+            self._station_display = None
 
         # Generate unique coordinator name
         if transport_type == TRANSPORT_TYPE_TRAIN:
@@ -104,38 +118,76 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         """
         try:
             if self.transport_type == TRANSPORT_TYPE_TRAIN:
-                # Fetch train routes
+                # Fetch train routes using Israel Rail API
                 _LOGGER.debug(
-                    "Fetching train routes from %s to %s",
+                    "Fetching train routes from %s to %s using Israel Rail API",
                     self.from_station,
                     self.to_station,
                 )
 
-                itineraries = await self.api_client.get_train_routes(
-                    self.from_station,
-                    self.to_station,
-                    number_of_routes=self.max_arrivals,
-                )
+                try:
+                    # Query Israel Rail API directly (bypass buggy translate_station)
+                    routes = await self.hass.async_add_executor_job(
+                        self._query_rail_api,
+                        self.from_station,
+                        self.to_station,
+                    )
 
-                # Process train routes
-                processed_data = self._process_train_routes(itineraries)
+                    # Process train routes
+                    processed_data = self._process_rail_routes(routes)
+
+                except Exception as err:
+                    raise UpdateFailed(
+                        f"Error fetching train data from Israel Rail API: {err}"
+                    ) from err
 
             else:
-                # Fetch bus/light rail arrivals
-                _LOGGER.debug(
-                    "Fetching data for station %s, lines: %s",
-                    self.station_id,
-                    self.bus_lines,
-                )
+                # Bus/Light Rail - use gov API if available, else BusNearby
+                if self.gov_api_client:
+                    processed_data = await self._fetch_gov_arrivals()
+                else:
+                    # Fallback to BusNearby (legacy)
+                    _LOGGER.debug(
+                        "Fetching data for %s, lines: %s",
+                        self._station_display,
+                        self.bus_lines,
+                    )
 
-                arrivals = await self.api_client.get_stop_times(
-                    self.station_id,
-                    self.bus_lines,
-                    number_of_departures=self.max_arrivals,
-                )
+                    arrivals = await self.api_client.get_stop_times(
+                        self.station_id,
+                        self.bus_lines,
+                        number_of_departures=self.max_arrivals,
+                    )
 
-                # Process arrivals into structured data
-                processed_data = self._process_arrivals(arrivals)
+                    _LOGGER.debug(
+                        "Received %d arrivals from API for %s",
+                        len(arrivals) if arrivals else 0,
+                        self._station_display,
+                    )
+
+                    processed_data = self._process_arrivals(arrivals)
+
+                    _LOGGER.debug(
+                        "Processed data for %s: lines found=%s, tracking lines=%s",
+                        self._station_display,
+                        list(processed_data.keys()) if processed_data else [],
+                        self.bus_lines,
+                    )
+
+                    if not processed_data and arrivals:
+                        _LOGGER.warning(
+                            "%s: API returned %d arrivals but none matched tracked lines %s. "
+                            "Available lines in response: %s",
+                            self._station_display,
+                            len(arrivals),
+                            self.bus_lines,
+                            list(set(a.get("routeShortName", "?") for a in arrivals)),
+                        )
+                    elif not processed_data and not arrivals:
+                        _LOGGER.info(
+                            "%s: No arrivals returned by API (station may have no service at this time)",
+                            self._station_display,
+                        )
 
             # Adjust update interval based on data
             self._adjust_update_interval(processed_data)
@@ -209,68 +261,195 @@ class SilentBusCoordinator(DataUpdateCoordinator):
 
         return processed
 
-    def _process_train_routes(
-        self, itineraries: list[dict[str, Any]]
-    ) -> dict[str, Any]:
-        """Process train route itineraries into structured format.
+    def _query_rail_api(self, from_station: str, to_station: str) -> list:
+        """Query Israel Rail API directly with station IDs.
+
+        This bypasses the buggy translate_station function in israelrailapi.
 
         Args:
-            itineraries: Raw itinerary data from API
+            from_station: Origin station ID (e.g., '9600' for Sderot)
+            to_station: Destination station ID (e.g., '3700' for Tel Aviv Savidor)
+
+        Returns:
+            List of TrainRoute objects
+        """
+        import time
+
+        api = GetRoutesApi()
+        today = time.strftime("%Y-%m-%d")
+        current_hour = time.strftime("%H:%M")
+
+        return api.request(
+            fromStation=from_station,
+            toStation=to_station,
+            date=today,
+            hour=current_hour,
+        )
+
+    def _process_rail_routes(self, routes: list) -> dict[str, Any]:
+        """Process train routes from Israel Rail API.
+
+        Args:
+            routes: List of TrainRoute objects from israelrailapi
 
         Returns:
             Dictionary with route key mapping to processed departure data
         """
         processed: dict[str, list[dict[str, Any]]] = {}
         now = datetime.now()
+        route_key = "train_route"
 
-        route_key = "train_route"  # Single key for train routes
-
-        for idx, itinerary in enumerate(itineraries):
-            # Get departure time
-            start_time = itinerary.get("startTime")
-            if not start_time:
+        for idx, route in enumerate(routes[: self.max_arrivals]):
+            # Get trains from route
+            trains = route.trains if hasattr(route, "trains") else []
+            if not trains:
                 continue
 
-            # Convert to datetime (milliseconds timestamp)
-            departure_time = datetime.fromtimestamp(start_time / 1000)
+            first_train = trains[0]
+
+            # Parse departure time (ISO format: "2025-12-29T16:12:00")
+            dep_time_str = (
+                first_train.departure if hasattr(first_train, "departure") else None
+            )
+            if not dep_time_str:
+                continue
+
+            try:
+                # Parse ISO datetime string
+                departure_time = datetime.fromisoformat(dep_time_str)
+            except (ValueError, TypeError):
+                continue
 
             # Calculate minutes until departure
             time_delta = departure_time - now
             minutes_until = max(0, int(time_delta.total_seconds() / 60))
 
-            # Get duration
-            duration_seconds = itinerary.get("duration", 0)
-            duration_minutes = int(duration_seconds / 60)
+            # Get platform and train number from raw data
+            platform = first_train.platform if hasattr(first_train, "platform") else ""
+            train_number = first_train.data.get("trainNumber", "") if hasattr(first_train, "data") else ""
 
-            # Extract route details (legs)
-            legs = itinerary.get("legs", [])
-            route_description = " → ".join(
-                [
-                    leg.get("to", {}).get("name", "Unknown")
-                    for leg in legs
-                    if leg.get("mode") == "RAIL"
-                ]
+            # Calculate total duration
+            duration_minutes = 0
+            last_train = trains[-1]
+            arr_time_str = (
+                last_train.arrival if hasattr(last_train, "arrival") else None
             )
+            if arr_time_str:
+                try:
+                    arrival_time = datetime.fromisoformat(arr_time_str)
+                    duration_minutes = int(
+                        (arrival_time - departure_time).total_seconds() / 60
+                    )
+                except (ValueError, TypeError):
+                    pass
 
-            # Create processed route entry
+            # Build direction string from destination station IDs
+            # Note: dst contains station ID, not name
+            direction = self.to_station_name or ""
+
             processed_route = {
                 "arrival_time": departure_time.isoformat(),
                 "minutes_until": minutes_until,
                 "duration_minutes": duration_minutes,
-                "is_realtime": itinerary.get("realtime", False),
-                "direction": route_description or f"{self.to_station_name}",
+                "is_realtime": False,  # Israel Rail API doesn't provide real-time
+                "direction": direction,
+                "platform": platform,
+                "train_number": str(train_number),
                 "route_index": idx,
+                "transfers": len(trains) - 1,
             }
 
-            # Add to routes list
             if route_key not in processed:
                 processed[route_key] = []
 
             processed[route_key].append(processed_route)
 
-        # Sort routes by departure time
+        # Sort by departure time
         if route_key in processed:
             processed[route_key].sort(key=lambda x: x["minutes_until"])
+
+        return processed
+
+    async def _fetch_gov_arrivals(self) -> dict[str, Any]:
+        """Fetch arrivals from bus.gov.il API.
+
+        Returns:
+            Dictionary mapping line numbers to processed arrival data
+        """
+        if not self.gov_api_client:
+            raise UpdateFailed("Gov API client not initialized")
+
+        _LOGGER.debug(
+            "Fetching gov API data for %s, lines: %s",
+            self._station_display,
+            self.bus_lines,
+        )
+
+        arrivals = await self.gov_api_client.get_arrivals(
+            self.station_id,
+            lines=self.bus_lines,
+        )
+
+        _LOGGER.debug(
+            "Received %d arrivals from gov API for %s",
+            len(arrivals) if arrivals else 0,
+            self._station_display,
+        )
+
+        return self._process_gov_arrivals(arrivals)
+
+    def _process_gov_arrivals(self, arrivals: list[dict[str, Any]]) -> dict[str, Any]:
+        """Process arrivals from bus.gov.il into sensor format.
+
+        Args:
+            arrivals: Raw arrivals from gov API
+
+        Returns:
+            Dictionary mapping line numbers to processed arrival data
+        """
+        processed: dict[str, list[dict[str, Any]]] = {}
+
+        for arrival in arrivals:
+            line_number = arrival.get("Shilut")
+            if not line_number:
+                continue
+
+            minutes_list = arrival.get("MinutesToArrivalList", [])
+            if not minutes_list:
+                # Fallback to single value
+                single_min = arrival.get("MinutesToArrival")
+                if single_min is not None:
+                    minutes_list = [single_min]
+
+            direction = arrival.get("Description", "")
+            operator = arrival.get("CompanyName", "")
+
+            # Create arrival entries for each upcoming arrival
+            now = datetime.now()
+            line_arrivals = []
+            for minutes in minutes_list:
+                # Calculate arrival time from minutes
+                arrival_time = now + timedelta(minutes=minutes)
+                line_arrivals.append(
+                    {
+                        "arrival_time": arrival_time.isoformat(),
+                        "minutes_until": minutes,
+                        "is_realtime": True,  # Gov API always returns real-time
+                        "direction": direction,
+                        "operator": operator,
+                    }
+                )
+
+            if line_number not in processed:
+                processed[line_number] = []
+
+            processed[line_number].extend(line_arrivals)
+
+        # Sort arrivals by time for each line
+        for line_number in processed:
+            processed[line_number].sort(key=lambda x: x["minutes_until"])
+            # Limit to max_arrivals
+            processed[line_number] = processed[line_number][: self.max_arrivals]
 
         return processed
 

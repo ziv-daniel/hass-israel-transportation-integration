@@ -142,6 +142,69 @@ class BusNearbyApiClient:
         except Exception as err:
             raise InvalidResponseError(f"Invalid response from API: {err}") from err
 
+    def _normalize_pattern_response(
+        self, data: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Normalize pattern-based API response to standard format.
+
+        The API sometimes returns data in a pattern-based format:
+        [{"pattern": {"route": {...}}, "stoptimes": [...]}, ...]
+
+        This normalizes it to the expected format:
+        [{"routeShortName": "249", "serviceDay": ..., "realtimeArrival": ...}, ...]
+
+        Args:
+            data: List of pattern objects from API
+
+        Returns:
+            List of normalized arrival dictionaries
+        """
+        normalized: list[dict[str, Any]] = []
+
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+
+            # Extract route info from pattern
+            pattern = item.get("pattern", {})
+            route = pattern.get("route", {})
+            route_short_name = route.get("shortName", "")
+
+            # Get stoptimes from the item
+            stoptimes = item.get("stoptimes", [])
+            if not stoptimes and "times" in item:
+                stoptimes = item.get("times", [])
+
+            # If no stoptimes found, try to extract from item directly
+            # (sometimes the item itself contains the arrival info)
+            if not stoptimes:
+                # Check if item has arrival time fields directly
+                if "realtimeArrival" in item or "scheduledArrival" in item:
+                    stoptimes = [item]
+
+            for stoptime in stoptimes:
+                if not isinstance(stoptime, dict):
+                    continue
+
+                arrival_entry = {
+                    "routeShortName": route_short_name
+                    or stoptime.get("routeShortName", ""),
+                    "serviceDay": stoptime.get("serviceDay", 0),
+                    "realtimeArrival": stoptime.get("realtimeArrival", 0),
+                    "scheduledArrival": stoptime.get("scheduledArrival", 0),
+                    "realtime": stoptime.get("realtime", False),
+                    "headsign": stoptime.get("headsign", "")
+                    or stoptime.get("tripHeadsign", "")
+                    or pattern.get("headsign", ""),
+                }
+
+                # Only add if we have a valid route name
+                if arrival_entry["routeShortName"]:
+                    normalized.append(arrival_entry)
+
+        _LOGGER.debug("Normalized %d arrivals from pattern response", len(normalized))
+        return normalized
+
     async def search_station(
         self, query: str, locale: str = "he"
     ) -> list[dict[str, Any]]:
@@ -238,24 +301,66 @@ class BusNearbyApiClient:
         try:
             data = await self._make_request(url, params)
 
-            if not isinstance(data, dict):
-                raise InvalidResponseError(
-                    "Invalid response format: expected dictionary"
-                )
+            _LOGGER.info(
+                "Raw API response for station %s: type=%s, data=%s",
+                stop_id,
+                type(data).__name__,
+                str(data)[:500] if data else "None",
+            )
 
-            # Handle missing 'times' key gracefully - station may have no scheduled service
-            if "times" not in data:
+            # Handle both response formats:
+            # 1. Dictionary with "times" key: {"times": [...]}
+            # 2. Direct list of pattern/stoptimes: [{pattern: {...}, stoptimes: [...]}, ...]
+            if isinstance(data, list):
+                # API returned pattern-based list format
                 _LOGGER.debug(
-                    "Station %s has no scheduled times (no service or no routes)",
-                    stop_id
+                    "Station %s returned direct list format with %d items",
+                    stop_id,
+                    len(data),
                 )
-                return []
-
-            arrivals = data["times"]
-
-            if not isinstance(arrivals, list):
+                arrivals = self._normalize_pattern_response(data)
+                _LOGGER.debug(
+                    "Normalized arrivals for station %s: %d items, lines: %s",
+                    stop_id,
+                    len(arrivals),
+                    list(set(a.get("routeShortName", "") for a in arrivals)),
+                )
+            elif isinstance(data, dict):
+                # API returned dictionary format
+                if "times" not in data:
+                    _LOGGER.debug(
+                        "Station %s has no scheduled times (no service or no routes). Keys in response: %s",
+                        stop_id,
+                        list(data.keys()) if data else "None",
+                    )
+                    return []
+                arrivals = data["times"]
+                if not isinstance(arrivals, list):
+                    raise InvalidResponseError(
+                        "Invalid response format: 'times' is not a list"
+                    )
+                _LOGGER.debug(
+                    "Dict format arrivals for station %s: %d items, lines: %s",
+                    stop_id,
+                    len(arrivals),
+                    list(
+                        set(
+                            a.get("routeShortName", "")
+                            for a in arrivals
+                            if isinstance(a, dict)
+                        )
+                    ),
+                )
+            else:
+                response_preview = str(data)[:200] if data else "empty/null"
+                _LOGGER.error(
+                    "Invalid API response for station %s: expected dict or list, got %s. Response: %s",
+                    stop_id,
+                    type(data).__name__,
+                    response_preview,
+                )
                 raise InvalidResponseError(
-                    "Invalid response format: 'times' is not a list"
+                    f"Invalid response format: expected dictionary or list, got {type(data).__name__}"
                 )
 
             # Filter by bus lines if specified
@@ -292,6 +397,51 @@ class BusNearbyApiClient:
             return result is not None and len(result) > 0
         except BusNearbyApiError:
             return False
+
+    async def validate_station_api_response(self, station_id: str) -> tuple[bool, str]:
+        """Validate that station returns valid API response format.
+
+        This method tests the actual stop times endpoint to ensure the station
+        returns data in the expected format. Use this during setup to fail early
+        if a station has API compatibility issues.
+
+        Args:
+            station_id: Station ID to validate
+
+        Returns:
+            Tuple of (is_valid, error_message). If valid, error_message is empty.
+        """
+        try:
+            await self.get_stop_times(station_id, number_of_departures=1)
+            return True, ""
+        except InvalidResponseError as err:
+            return False, str(err)
+        except BusNearbyApiError as err:
+            return False, str(err)
+
+    async def validate_train_route_api_response(
+        self, from_station: str, to_station: str
+    ) -> tuple[bool, str]:
+        """Validate that train route returns valid API response format.
+
+        This method tests the train routes endpoint to ensure the stations
+        return data in the expected format. Use this during setup to fail early
+        if a route has API compatibility issues.
+
+        Args:
+            from_station: Origin station ID
+            to_station: Destination station ID
+
+        Returns:
+            Tuple of (is_valid, error_message). If valid, error_message is empty.
+        """
+        try:
+            await self.get_train_routes(from_station, to_station, number_of_routes=1)
+            return True, ""
+        except InvalidResponseError as err:
+            return False, str(err)
+        except BusNearbyApiError as err:
+            return False, str(err)
 
     async def get_train_routes(
         self,

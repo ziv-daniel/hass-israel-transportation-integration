@@ -14,7 +14,6 @@ TRAIN_STATIONS = {
     "3700": ("תל אביב - אוניברסיטה", "Tel Aviv - University"),
     "4600": ("תל אביב - השלום", "Tel Aviv - HaShalom"),
     "4900": ("תל אביב - הגנה", "Tel Aviv - HaHagana"),
-
     # Central District
     "3500": ("בני ברק", "Bnei Brak"),
     "2800": ("פתח תקווה - קריית אריה", "Petah Tikva - Kiryat Aryeh"),
@@ -29,12 +28,10 @@ TRAIN_STATIONS = {
     "4800": ("בית שמש", "Beit Shemesh"),
     "5010": ("מודיעין מרכז", "Modi'in Center"),
     "5000": ("מודיעין מכבים רעות", "Modi'in Makabim Reut"),
-    "680": ("כפר חב\"ד", "Kfar Chabad"),
-
+    "680": ('כפר חב"ד', "Kfar Chabad"),
     # Jerusalem
     "6500": ("ירושלים - יצחק נבון", "Jerusalem - Yitzhak Navon"),
     "6300": ("ירושלים - מלחה", "Jerusalem - Malha"),
-
     # Coastal Plain
     "8550": ("בת ים - יוספטל", "Bat Yam - Yoseftal"),
     "8600": ("בת ים - קוממיות", "Bat Yam - Komemiyut"),
@@ -51,7 +48,6 @@ TRAIN_STATIONS = {
     "2940": ("בית יהושע", "Beit Yehoshua"),
     "3310": ("נתיבות קיסריה", "Caesarea Pardes Hanna"),
     "2760": ("בניימינה", "Binyamina"),
-
     # Haifa
     "2200": ("חדרה - מערב", "Hadera - West"),
     "2300": ("חיפה - בת גלים", "Haifa - Bat Galim"),
@@ -60,11 +56,9 @@ TRAIN_STATIONS = {
     "1820": ("לב המפרץ", "Lev HaMifratz"),
     "4650": ("עכו", "Acre"),
     "4690": ("נהריה", "Nahariya"),
-
     # North
     "5800": ("קריית שמונה", "Kiryat Shmona"),
     "4680": ("אחיהוד", "Ahihud"),
-
     # South
     "5900": ("באר יעקב", "Be'er Ya'akov"),
     "5200": ("יבנה - מערב", "Yavne - West"),
@@ -85,15 +79,17 @@ def get_train_stations_list():
     """
     stations = []
     for station_id, (name_he, name_en) in TRAIN_STATIONS.items():
-        stations.append({
-            'id': station_id,
-            'name': f"{name_en} / {name_he}",
-            'name_en': name_en,
-            'name_he': name_he,
-        })
+        stations.append(
+            {
+                "id": station_id,
+                "name": f"{name_en} / {name_he}",
+                "name_en": name_en,
+                "name_he": name_he,
+            }
+        )
 
     # Sort by English name
-    stations.sort(key=lambda s: s['name_en'])
+    stations.sort(key=lambda s: s["name_en"])
 
     return stations
 

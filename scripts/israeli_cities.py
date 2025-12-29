@@ -29,7 +29,6 @@ ISRAELI_CITIES = {
     "רחובות": "Rehovot",
     "בת ים": "Bat Yam",
     "בת-ים": "Bat Yam",
-
     # Medium Cities (50,000-100,000)
     "הרצליה": "Herzliya",
     "כפר סבא": "Kfar Saba",
@@ -60,7 +59,6 @@ ISRAELI_CITIES = {
     "הוד-השרון": "Hod HaSharon",
     "רמת השרון": "Ramat HaSharon",
     "רמת-השרון": "Ramat HaSharon",
-
     # Smaller Cities and Towns
     "אור יהודה": "Or Yehuda",
     "אור-יהודה": "Or Yehuda",
@@ -111,18 +109,15 @@ ISRAELI_CITIES = {
     "שדרות": "Sderot",
     "שפרעם": "Shefa-'Amr",
     "תל שבע": "Tel Sheva",
-
     # Tel Aviv neighborhoods (often appear as separate)
     "יפו": "Tel Aviv - Jaffa",
     "רמת אביב": "Tel Aviv - Ramat Aviv",
     "גבעת שמואל": "Givat Shmuel",
     "קריית מלאכי": "Kiryat Malakhi",
-
     # Jerusalem areas
     "בית וגן": "Jerusalem - Beit Vagan",
     "גבעת שאול": "Jerusalem - Givat Shaul",
     "תלפיות": "Jerusalem - Talpiot",
-
     # Gush Dan (Greater Tel Aviv)
     "אזור": "Azor",
     "גן יבנה": "Gan Yavne",
@@ -162,6 +157,7 @@ ENGLISH_VARIANTS = {
     "Eilat": "Eilat",
     "Afula": "Afula",
 }
+
 
 def get_all_city_mappings():
     """Get combined dictionary of all city name mappings."""
