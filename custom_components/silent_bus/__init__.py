@@ -14,7 +14,7 @@ from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import ApiConnectionError, BusNearbyApiClient
+from .api import ApiConnectionError
 from .gov_api import GovApiClient
 from .const import (
     CONF_BUS_LINES,
@@ -84,29 +84,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Convert update interval to timedelta
     update_interval = timedelta(seconds=update_interval_seconds)
 
-    # Create API client
-    session = async_get_clientsession(hass)
-    api_client = BusNearbyApiClient(session)
-
     # Validate connection and create coordinator based on transport type
+    session = async_get_clientsession(hass)
+
     try:
         if transport_type == TRANSPORT_TYPE_TRAIN:
-            # Train configuration
+            # Train configuration - uses Israel Rail API directly (no BusNearby)
             from_station = entry.data[CONF_FROM_STATION]
             to_station = entry.data[CONF_TO_STATION]
             from_station_name = entry.data[CONF_FROM_STATION_NAME]
             to_station_name = entry.data[CONF_TO_STATION_NAME]
 
-            # Note: We skip BusNearby validation for trains because:
-            # 1. Train stations use Israel Railways codes (e.g., 7300 for Sderot)
-            # 2. BusNearby API uses different internal station IDs
-            # 3. Dropdown selections contain curated, known-valid station codes
-            # Validation will happen at first data fetch instead.
-
-            # Create coordinator for train
+            # Create coordinator for train (uses israelrailapi library internally)
             coordinator = SilentBusCoordinator(
                 hass=hass,
-                api_client=api_client,
                 update_interval=update_interval,
                 config_entry=entry,
                 transport_type=transport_type,
@@ -156,7 +147,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
-        "api_client": api_client,
     }
 
     # Set up platforms
