@@ -2,18 +2,31 @@
 
 This module loads the pre-processed GTFS cities index and provides
 functions to access station data for the config flow.
+
+If the GTFS data file is missing (e.g., not downloaded by HACS), this module
+will automatically download it from the latest GitHub release.
 """
 
 import asyncio
+import gzip
 import json
 import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None  # Will be available in Home Assistant environment
+
 _LOGGER = logging.getLogger(__name__)
 
 # Cache for loaded GTFS data
 _CITIES_INDEX_CACHE: Optional[Dict] = None
+
+# GitHub repository for downloading GTFS data
+GITHUB_REPO = "ziv-daniel/hass-israel-transportation-integration"
+GTFS_ASSET_NAME = "cities_index.json.gz"
 
 
 def get_gtfs_data_path() -> Path:
@@ -23,6 +36,91 @@ def get_gtfs_data_path() -> Path:
         Path to gtfs_data directory
     """
     return Path(__file__).parent / "gtfs_data"
+
+
+async def download_gtfs_data_from_release() -> bool:
+    """Download GTFS data from the latest GitHub release.
+
+    Returns:
+        True if download successful, False otherwise
+    """
+    if aiohttp is None:
+        _LOGGER.error("aiohttp not available, cannot download GTFS data")
+        return False
+
+    try:
+        _LOGGER.info("Attempting to download GTFS data from GitHub releases...")
+
+        # Get latest release info
+        async with aiohttp.ClientSession() as session:
+            release_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+
+            async with session.get(release_url, timeout=aiohttp.ClientTimeout(total=30)) as response:
+                if response.status != 200:
+                    _LOGGER.error(f"Failed to get latest release info: HTTP {response.status}")
+                    return False
+
+                release_data = await response.json()
+
+                # Find the GTFS data asset
+                gtfs_asset = None
+                for asset in release_data.get("assets", []):
+                    if asset["name"] == GTFS_ASSET_NAME:
+                        gtfs_asset = asset
+                        break
+
+                if not gtfs_asset:
+                    _LOGGER.error(f"GTFS data asset '{GTFS_ASSET_NAME}' not found in release")
+                    return False
+
+                download_url = gtfs_asset["browser_download_url"]
+                _LOGGER.info(f"Downloading GTFS data from: {download_url}")
+
+                # Download the compressed file
+                async with session.get(download_url, timeout=aiohttp.ClientTimeout(total=120)) as download_response:
+                    if download_response.status != 200:
+                        _LOGGER.error(f"Failed to download GTFS data: HTTP {download_response.status}")
+                        return False
+
+                    compressed_data = await download_response.read()
+                    _LOGGER.info(f"Downloaded {len(compressed_data)} bytes (compressed)")
+
+        # Decompress the data
+        try:
+            decompressed_data = gzip.decompress(compressed_data)
+            _LOGGER.info(f"Decompressed to {len(decompressed_data)} bytes")
+        except Exception as e:
+            _LOGGER.error(f"Failed to decompress GTFS data: {e}")
+            return False
+
+        # Ensure gtfs_data directory exists
+        gtfs_dir = get_gtfs_data_path()
+        gtfs_dir.mkdir(parents=True, exist_ok=True)
+
+        # Save the decompressed file
+        output_path = gtfs_dir / "cities_index.json"
+        output_path.write_bytes(decompressed_data)
+        _LOGGER.info(f"GTFS data saved to: {output_path}")
+
+        # Validate the downloaded data
+        try:
+            cities_data = json.loads(decompressed_data)
+            city_count = len(cities_data)
+            station_count = sum(len(city["stations"]) for city in cities_data.values())
+            _LOGGER.info(f"Successfully downloaded GTFS data: {city_count} cities, {station_count} stations")
+            return True
+        except json.JSONDecodeError as e:
+            _LOGGER.error(f"Downloaded GTFS data is not valid JSON: {e}")
+            # Delete the invalid file
+            output_path.unlink(missing_ok=True)
+            return False
+
+    except asyncio.TimeoutError:
+        _LOGGER.error("Timeout while downloading GTFS data")
+        return False
+    except Exception as e:
+        _LOGGER.error(f"Unexpected error downloading GTFS data: {e}")
+        return False
 
 
 def load_cities_index() -> Dict:
@@ -72,11 +170,14 @@ async def async_load_cities_index() -> Dict:
     This runs the file I/O in a thread pool to avoid blocking the event loop.
     Should be called once during config flow setup to pre-load the cache.
 
+    If the GTFS data file is not found (e.g., not downloaded by HACS),
+    this function will attempt to download it from the latest GitHub release.
+
     Returns:
         Dictionary mapping city names to station data
 
     Raises:
-        FileNotFoundError: If cities_index.json doesn't exist
+        FileNotFoundError: If cities_index.json doesn't exist and download fails
         json.JSONDecodeError: If JSON is malformed
     """
     global _CITIES_INDEX_CACHE
@@ -84,6 +185,31 @@ async def async_load_cities_index() -> Dict:
     # Return cached data if available (no I/O needed)
     if _CITIES_INDEX_CACHE is not None:
         return _CITIES_INDEX_CACHE
+
+    # Check if GTFS data file exists
+    index_path = get_gtfs_data_path() / "cities_index.json"
+
+    if not index_path.exists():
+        _LOGGER.warning(
+            "GTFS data file not found. This may happen if HACS didn't download it. "
+            "Attempting to download from GitHub releases..."
+        )
+
+        # Attempt to download from GitHub releases
+        download_success = await download_gtfs_data_from_release()
+
+        if not download_success:
+            _LOGGER.error(
+                "Failed to download GTFS data. Please ensure you have an internet connection, "
+                "or manually download cities_index.json from the GitHub releases."
+            )
+            raise FileNotFoundError(
+                "GTFS station data not found and could not be downloaded automatically. "
+                "Please check your internet connection or download manually from "
+                f"https://github.com/{GITHUB_REPO}/releases/latest"
+            )
+
+        _LOGGER.info("GTFS data downloaded successfully!")
 
     # Run the blocking I/O in a thread pool
     return await asyncio.to_thread(load_cities_index)
