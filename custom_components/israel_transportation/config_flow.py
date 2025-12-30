@@ -292,10 +292,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Use SelectSelector with dropdown mode for searchable list
         data_schema = vol.Schema(
             {
-                vol.Required(
-                    "city_id",
-                    default=suggested_city["id"] if suggested_city else None,
-                ): SelectSelector(
+                vol.Required("city_id"): SelectSelector(
                     SelectSelectorConfig(
                         options=city_options,
                         mode=SelectSelectorMode.DROPDOWN,
