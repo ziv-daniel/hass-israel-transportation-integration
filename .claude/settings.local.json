@@ -101,7 +101,14 @@
       "Bash(git push:*)",
       "Skill(superpowers:brainstorming)",
       "Bash(dir :*)",
-      "Bash(move:*)"
+      "Bash(move:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_type",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_wait_for",
+      "Bash(findstr:*)",
+      "mcp__qdrant__qdrant-store"
     ],
     "deny": [
       "Bash(rm:*)",
