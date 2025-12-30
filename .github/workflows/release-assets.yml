@@ -1,0 +1,59 @@
+name: Upload Release Assets
+
+on:
+  release:
+    types: [created, published]
+
+jobs:
+  upload-gtfs-data:
+    name: Upload GTFS Data to Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify GTFS data exists
+        run: |
+          if [ ! -f "custom_components/israel_transportation/gtfs_data/cities_index.json" ]; then
+            echo "Error: GTFS data file not found!"
+            exit 1
+          fi
+
+          # Get file size
+          SIZE=$(stat -f%z "custom_components/israel_transportation/gtfs_data/cities_index.json" 2>/dev/null || stat -c%s "custom_components/israel_transportation/gtfs_data/cities_index.json")
+          echo "GTFS data file size: $SIZE bytes"
+
+          # Verify file is not empty
+          if [ $SIZE -lt 1000 ]; then
+            echo "Error: GTFS data file is too small (less than 1KB)"
+            exit 1
+          fi
+
+      - name: Compress GTFS data
+        run: |
+          cd custom_components/israel_transportation/gtfs_data
+          gzip -9 -k cities_index.json
+          ls -lh cities_index.json*
+
+      - name: Upload GTFS data to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            custom_components/israel_transportation/gtfs_data/cities_index.json.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "✅ GTFS data uploaded to release successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**File**: cities_index.json.gz" >> $GITHUB_STEP_SUMMARY
+          UNCOMPRESSED=$(stat -f%z "custom_components/israel_transportation/gtfs_data/cities_index.json" 2>/dev/null || stat -c%s "custom_components/israel_transportation/gtfs_data/cities_index.json")
+          COMPRESSED=$(stat -f%z "custom_components/israel_transportation/gtfs_data/cities_index.json.gz" 2>/dev/null || stat -c%s "custom_components/israel_transportation/gtfs_data/cities_index.json.gz")
+          echo "**Uncompressed**: $(numfmt --to=iec $UNCOMPRESSED)" >> $GITHUB_STEP_SUMMARY
+          echo "**Compressed**: $(numfmt --to=iec $COMPRESSED)" >> $GITHUB_STEP_SUMMARY
+          RATIO=$(awk "BEGIN {printf \"%.1f\", ($COMPRESSED/$UNCOMPRESSED)*100}")
+          echo "**Compression ratio**: ${RATIO}%" >> $GITHUB_STEP_SUMMARY
