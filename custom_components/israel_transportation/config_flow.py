@@ -24,6 +24,9 @@ from homeassistant.helpers.selector import (
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
 )
 
 from .gtfs_loader import (
@@ -398,19 +401,18 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            station_id = user_input["station_id"]
+            station_input = user_input["station_id"].strip()
 
             # Handle manual entry fallback
-            if station_id == "manual":
+            if station_input.lower() == "manual" or "manual" in station_input.lower():
                 return await self.async_step_station_config()
 
-            # Get station details from GTFS data
+            # Get station details from GTFS data and match user input
             stations = get_stations_for_city(self._selected_city)
-            selected_station = next(
-                (s for s in stations if s["id"] == station_id), None
-            )
+            selected_station = self._find_station_by_input(stations, station_input)
 
             if selected_station:
+                station_id = selected_station["id"]
                 self._station_name = selected_station["name"]
 
                 # Validate and resolve actual stop_id via API
@@ -473,35 +475,26 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # No stations found, fall back to manual entry
             return await self.async_step_station_config()
 
-        # Build station options with SelectSelector
-        # Sort by name and take first 100 stations
-        sorted_stations = sorted(stations, key=lambda s: s["name"])[:100]
+        # Build autocomplete list with TextSelector (no 100-station limit!)
+        # Sort all stations alphabetically by name
+        sorted_stations = sorted(stations, key=lambda s: s["name"])
 
-        station_options: list[SelectOptionDict] = []
-        for station in sorted_stations:
-            station_options.append(
-                SelectOptionDict(
-                    value=station["id"],
-                    label=f"{station['name']} ({station['id']})",
-                )
-            )
+        # Create autocomplete suggestions (show all stations)
+        autocomplete_list = [
+            f"{station['name']} ({station['id']})"
+            for station in sorted_stations
+        ]
 
-        # Add manual entry fallback
-        station_options.append(
-            SelectOptionDict(
-                value="manual",
-                label="🔍 Enter station ID manually...",
-            )
-        )
+        # Add manual entry option
+        autocomplete_list.append("manual - Enter station ID manually")
 
         data_schema = vol.Schema(
             {
-                vol.Required("station_id"): SelectSelector(
-                    SelectSelectorConfig(
-                        options=station_options,
-                        mode=SelectSelectorMode.DROPDOWN,
-                        custom_value=False,
-                        sort=False,  # Already sorted alphabetically
+                vol.Required("station_id"): TextSelector(
+                    TextSelectorConfig(
+                        type=TextSelectorType.TEXT,
+                        autocomplete=autocomplete_list,
+                        multiline=False,
                     )
                 ),
             }
@@ -516,6 +509,54 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "station_count": str(len(stations)),
             },
         )
+
+    def _find_station_by_input(
+        self, stations: list[dict], user_input: str
+    ) -> dict | None:
+        """Find station by ID or name from user input.
+
+        Args:
+            stations: List of station dictionaries
+            user_input: User's text input (could be ID, name, or formatted string)
+
+        Returns:
+            Matching station dict or None
+
+        Examples:
+            >>> _find_station_by_input(stations, "Station Name (12345)")
+            {'id': '12345', 'name': 'Station Name', ...}
+
+            >>> _find_station_by_input(stations, "12345")
+            {'id': '12345', 'name': 'Station Name', ...}
+        """
+        import re
+
+        user_input = user_input.strip()
+
+        # Check for manual entry option
+        if user_input.lower() == "manual" or "manual" in user_input.lower():
+            return None
+
+        # Extract ID from formatted string like "Station Name (12345)"
+        id_match = re.search(r'\((\d+)\)$', user_input)
+        if id_match:
+            station_id = id_match.group(1)
+        else:
+            # Try using input directly as ID
+            station_id = user_input
+
+        # Try exact ID match first
+        for station in stations:
+            if station["id"] == station_id:
+                return station
+
+        # Fallback: fuzzy name matching
+        user_lower = user_input.lower()
+        for station in stations:
+            if user_lower in station["name"].lower():
+                return station
+
+        return None
 
     async def async_step_station_config(
         self, user_input: dict[str, Any] | None = None

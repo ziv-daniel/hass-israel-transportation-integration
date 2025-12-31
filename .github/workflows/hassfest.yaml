@@ -12,7 +12,7 @@ jobs:
     name: With hassfest
     steps:
       - name: "Check out repository"
-        uses: "actions/checkout@v4"
+        uses: "actions/checkout@v6"
 
       - name: "Run hassfest validation"
         uses: "home-assistant/actions/hassfest@master"

@@ -23,10 +23,12 @@ _LOGGER = logging.getLogger(__name__)
 
 # Cache for loaded GTFS data
 _CITIES_INDEX_CACHE: Optional[Dict] = None
+_ROUTES_INDEX_CACHE: Optional[Dict] = None
 
 # GitHub repository for downloading GTFS data
 GITHUB_REPO = "ziv-daniel/hass-israel-transportation-integration"
 GTFS_ASSET_NAME = "cities_index.json.gz"
+ROUTES_ASSET_NAME = "routes_index.json.gz"
 
 
 def get_gtfs_data_path() -> Path:
@@ -162,6 +164,94 @@ def load_cities_index() -> Dict:
     )
 
     return _CITIES_INDEX_CACHE
+
+
+def load_routes_index() -> Dict:
+    """Load the routes index from compressed JSON file.
+
+    Returns:
+        Dictionary mapping station IDs to route data
+
+    Raises:
+        FileNotFoundError: If routes_index.json.gz doesn't exist
+        json.JSONDecodeError: If JSON is malformed
+    """
+    global _ROUTES_INDEX_CACHE
+
+    # Return cached data if available
+    if _ROUTES_INDEX_CACHE is not None:
+        return _ROUTES_INDEX_CACHE
+
+    # Load from file
+    index_path = get_gtfs_data_path() / "routes_index.json.gz"
+
+    if not index_path.exists():
+        _LOGGER.debug(
+            f"Routes index not found at {index_path}. "
+            "GTFS route data fallback will not be available."
+        )
+        raise FileNotFoundError("Routes index not found")
+
+    _LOGGER.info(f"Loading GTFS routes index from {index_path}")
+
+    try:
+        # Read and decompress gzip file
+        with gzip.open(index_path, "rt", encoding="utf-8") as f:
+            _ROUTES_INDEX_CACHE = json.load(f)
+
+        station_count = len(_ROUTES_INDEX_CACHE.get("stations", {}))
+        _LOGGER.info(f"Loaded routes data for {station_count:,} stations")
+
+        return _ROUTES_INDEX_CACHE
+    except Exception as e:
+        _LOGGER.error(f"Failed to load routes index: {e}")
+        raise
+
+
+def get_route_headsign(station_id: str, route_number: str) -> Optional[str]:
+    """Get route headsign from GTFS data for a specific station and route.
+
+    This provides a fallback when the real-time API doesn't return direction/headsign data.
+
+    Args:
+        station_id: Station ID (e.g., "12664")
+        route_number: Route/line number (e.g., "1", "5")
+
+    Returns:
+        Headsign/direction string or None if not found
+
+    Example:
+        >>> get_route_headsign("12664", "1")
+        "Tel Aviv Central Station"
+    """
+    try:
+        routes_data = load_routes_index()
+    except FileNotFoundError:
+        _LOGGER.debug("Routes index not available, cannot provide GTFS fallback")
+        return None
+
+    # Get station routes
+    station_data = routes_data.get("stations", {}).get(station_id)
+    if not station_data:
+        return None
+
+    # Find matching route by route_short_name
+    for route in station_data.get("routes", []):
+        if route.get("route_short_name") == route_number:
+            # Prefer trip_headsign, fallback to route_long_name
+            trips = route.get("trips", [])
+            if trips:
+                # Get the first trip's headsign (most common)
+                trip_headsign = trips[0].get("trip_headsign", "").strip()
+                if trip_headsign:
+                    return trip_headsign
+
+            # Fallback to route long name
+            route_long_name = route.get("route_long_name", "").strip()
+            if route_long_name:
+                return route_long_name
+
+    return None
 
 
 async def async_load_cities_index() -> Dict:

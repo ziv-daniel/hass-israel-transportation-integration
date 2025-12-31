@@ -8,11 +8,13 @@ from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from israelrailapi.api import GetRoutesApi
 
 from .api import BusNearbyApiClient, BusNearbyApiError
 from .gov_api import GovApiClient
+from .gtfs_loader import get_route_headsign
 from .const import (
     APPROACHING_THRESHOLD,
     DEFAULT_MAX_ARRIVALS,
@@ -92,6 +94,9 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             self._station_display = get_station_display_name(station_id)
         else:
             self._station_display = None
+
+        # GTFS direction cache for fallback when API doesn't provide direction
+        self._gtfs_direction_cache: dict[tuple[str, str], str | None] = {}
 
         # Generate unique coordinator name
         if transport_type == TRANSPORT_TYPE_TRAIN:
@@ -214,7 +219,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             Dictionary mapping line numbers to processed arrival data
         """
         processed: dict[str, list[dict[str, Any]]] = {}
-        now = datetime.now()
+        now = dt_util.now()
 
         for arrival in arrivals:
             line_number = arrival.get("routeShortName")
@@ -227,9 +232,10 @@ class SilentBusCoordinator(DataUpdateCoordinator):
                 "realtimeArrival", arrival.get("scheduledArrival", 0)
             )
 
-            # Convert to datetime
+            # Convert to timezone-aware datetime
             arrival_timestamp = service_day + realtime_arrival
-            arrival_time = datetime.fromtimestamp(arrival_timestamp)
+            arrival_time = dt_util.utc_from_timestamp(arrival_timestamp)
+            arrival_time = dt_util.as_local(arrival_time)
 
             # Calculate minutes until arrival
             time_delta = arrival_time - now
@@ -238,8 +244,28 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             # Check if this is real-time data
             is_realtime = arrival.get("realtime", False)
 
-            # Get direction/headsign
-            direction = arrival.get("headsign", arrival.get("tripHeadsign", "Unknown"))
+            # Get direction/headsign with GTFS fallback
+            headsign = arrival.get("headsign", "").strip()
+            trip_headsign = arrival.get("tripHeadsign", "").strip()
+            direction = headsign or trip_headsign
+
+            # Fallback chain: API → GTFS → Line number
+            if not direction:
+                cache_key = (self.station_id, line_number)
+                if cache_key in self._gtfs_direction_cache:
+                    direction = self._gtfs_direction_cache[cache_key] or f"Line {line_number}"
+                else:
+                    gtfs_direction = get_route_headsign(self.station_id, line_number)
+                    self._gtfs_direction_cache[cache_key] = gtfs_direction
+                    direction = gtfs_direction or f"Line {line_number}"
+
+                    if gtfs_direction:
+                        _LOGGER.debug(
+                            "Station %s, line %s: Using GTFS fallback direction: %s",
+                            self.station_id,
+                            line_number,
+                            direction,
+                        )
 
             # Create processed arrival entry
             processed_arrival = {
@@ -296,7 +322,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             Dictionary with route key mapping to processed departure data
         """
         processed: dict[str, list[dict[str, Any]]] = {}
-        now = datetime.now()
+        now = dt_util.now()
         route_key = "train_route"
 
         for idx, route in enumerate(routes[: self.max_arrivals]):
@@ -307,7 +333,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
 
             first_train = trains[0]
 
-            # Parse departure time (ISO format: "2025-12-29T16:12:00")
+            # Parse departure time (ISO format with timezone: "2025-12-29T16:12:00+02:00")
             dep_time_str = (
                 first_train.departure if hasattr(first_train, "departure") else None
             )
@@ -315,8 +341,13 @@ class SilentBusCoordinator(DataUpdateCoordinator):
                 continue
 
             try:
-                # Parse ISO datetime string
-                departure_time = datetime.fromisoformat(dep_time_str)
+                # Parse ISO datetime string with timezone awareness
+                departure_time = dt_util.parse_datetime(dep_time_str)
+                if departure_time is None:
+                    # Fallback for non-standard formats
+                    departure_time = datetime.fromisoformat(dep_time_str)
+                    if departure_time.tzinfo is None:
+                        departure_time = dt_util.as_local(departure_time)
             except (ValueError, TypeError):
                 continue
 
@@ -336,7 +367,14 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             )
             if arr_time_str:
                 try:
-                    arrival_time = datetime.fromisoformat(arr_time_str)
+                    # Parse arrival time with timezone awareness
+                    arrival_time = dt_util.parse_datetime(arr_time_str)
+                    if arrival_time is None:
+                        # Fallback for non-standard formats
+                        arrival_time = datetime.fromisoformat(arr_time_str)
+                        if arrival_time.tzinfo is None:
+                            arrival_time = dt_util.as_local(arrival_time)
+
                     duration_minutes = int(
                         (arrival_time - departure_time).total_seconds() / 60
                     )
@@ -421,14 +459,41 @@ class SilentBusCoordinator(DataUpdateCoordinator):
                 if single_min is not None:
                     minutes_list = [single_min]
 
-            direction = arrival.get("Description", "")
+            direction = arrival.get("Description", "").strip()
             operator = arrival.get("CompanyName", "")
 
+            # Fallback chain: API → GTFS → Line number
+            if not direction:
+                # Check cache first
+                cache_key = (self.station_id, line_number)
+                if cache_key in self._gtfs_direction_cache:
+                    direction = self._gtfs_direction_cache[cache_key] or f"Line {line_number}"
+                else:
+                    # Try GTFS fallback
+                    gtfs_direction = get_route_headsign(self.station_id, line_number)
+                    self._gtfs_direction_cache[cache_key] = gtfs_direction
+
+                    if gtfs_direction:
+                        direction = gtfs_direction
+                        _LOGGER.debug(
+                            "Station %s, line %s: Using GTFS fallback direction: %s",
+                            self.station_id,
+                            line_number,
+                            direction,
+                        )
+                    else:
+                        direction = f"Line {line_number}"
+                        _LOGGER.debug(
+                            "Station %s, line %s: No GTFS data, using line number fallback",
+                            self.station_id,
+                            line_number,
+                        )
+
             # Create arrival entries for each upcoming arrival
-            now = datetime.now()
+            now = dt_util.now()
             line_arrivals = []
             for minutes in minutes_list:
-                # Calculate arrival time from minutes
+                # Calculate arrival time from minutes (timezone-aware)
                 arrival_time = now + timedelta(minutes=minutes)
                 line_arrivals.append(
                     {
@@ -464,7 +529,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         Args:
             data: Processed arrival data
         """
-        current_hour = datetime.now().hour
+        current_hour = dt_util.now().hour
 
         # Check if it's night time
         is_night = NIGHT_HOUR_START <= current_hour or current_hour < NIGHT_HOUR_END
