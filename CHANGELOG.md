@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.2] - 2025-12-31
+
+### Changed
+- Automated GTFS station data update
+- Updated Israeli transit station data from government GTFS feed
+- Station count: ~30,000 stops across all major cities
+
+
 ## [1.3.3] - 2025-12-28
 
 ### Fixed
