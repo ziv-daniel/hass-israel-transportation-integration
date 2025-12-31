@@ -1,0 +1,65 @@
+# .publicignore - Files to exclude when syncing to public repo
+# Similar to .gitignore syntax
+
+# Claude Code configuration and skills
+.claude/
+
+# Test files and configurations
+tests/
+pytest.ini
+requirements_test.txt
+.coverage
+coverage.xml
+htmlcov/
+
+# Development scripts
+scripts/
+
+# Pre-commit and linting configs
+.pre-commit-config.yaml
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Local development files
+.env
+.env.local
+*.local
+
+# Plan files
+.claude/plans/
+
+# Test result files
+tests/TEST_RESULTS.md
+tests/*_data.txt
+tests/stations_with_lines_*.txt
+
+# Git files (these are already handled but listed for clarity)
+.git/
+.gitignore

@@ -13,5 +13,5 @@
     "aiohttp>=3.9.0",
     "israel-rail-api==0.1.4"
   ],
-  "version": "2.0.2"
+  "version": "0.0.1-beta.1"
 }
