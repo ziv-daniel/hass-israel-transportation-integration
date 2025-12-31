@@ -52,13 +52,26 @@ wheels/
 .env.local
 *.local
 
-# Plan files
+# Plan files and private documentation
 .claude/plans/
+docs/plans/
+RELEASE_WORKFLOW_SETUP.md
+INTEGRATION_PLAN.md
+PRODUCTION_READINESS_REPORT.md
+SESSION_STATUS.md
+SESSION_SUMMARY_*.md
+GTFS_DATA_DISTRIBUTION_ISSUE.md
+todo_bug_invastigation.md
+examples/
 
 # Test result files
 tests/TEST_RESULTS.md
 tests/*_data.txt
 tests/stations_with_lines_*.txt
+
+# Private development workflows (public repo doesn't need these)
+.github/workflows/auto-beta-version.yml
+.github/workflows/release-to-public.yml
 
 # Git files (these are already handled but listed for clarity)
 .git/
