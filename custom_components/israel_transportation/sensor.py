@@ -15,6 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import (
     ATTR_ATTRIBUTION,
@@ -192,7 +193,7 @@ class SilentBusSensor(CoordinatorEntity, SensorEntity):
             ATTR_STATION_ID: self._station_id,
             ATTR_STATION_NAME: self._station_name,
             ATTR_ATTRIBUTION: ATTRIBUTION_GOV,
-            ATTR_LAST_UPDATE: datetime.now().isoformat(),
+            ATTR_LAST_UPDATE: dt_util.now().isoformat(),
         }
 
         if next_arrival:
@@ -310,7 +311,7 @@ class SilentBusTrainSensor(CoordinatorEntity, SensorEntity):
             "from_station_name": self._from_station_name,
             "to_station_name": self._to_station_name,
             ATTR_ATTRIBUTION: ATTRIBUTION_RAIL,
-            ATTR_LAST_UPDATE: datetime.now().isoformat(),
+            ATTR_LAST_UPDATE: dt_util.now().isoformat(),
         }
 
         if next_departure:

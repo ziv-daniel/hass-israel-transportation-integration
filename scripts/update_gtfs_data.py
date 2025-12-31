@@ -10,9 +10,11 @@ License: CDLA-Permissive-1.0
 """
 
 import asyncio
+import gzip
 import json
 import re
 import zipfile
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict
 import sys
@@ -301,6 +303,286 @@ def parse_stops(zip_path: Path) -> Dict[str, Dict]:
     return cities_index
 
 
+def parse_routes(zip_path: Path) -> Dict[str, Dict]:
+    """Parse routes.txt from GTFS zip.
+
+    Args:
+        zip_path: Path to the GTFS zip file
+
+    Returns:
+        Dictionary mapping route_id to route info
+
+    Example output:
+        {
+            "7021": {
+                "route_id": "7021",
+                "route_short_name": "1",
+                "route_long_name": "Jerusalem - Tel Aviv",
+                "route_desc": "",
+                "route_type": "3"
+            },
+            ...
+        }
+    """
+    print("Parsing routes.txt...")
+
+    routes = {}
+    total_routes = 0
+
+    with zipfile.ZipFile(zip_path) as zf:
+        with zf.open("routes.txt", "r") as f:
+            lines = f.read().decode("utf-8-sig").splitlines()
+            header = lines[0].split(",")
+
+            try:
+                route_id_idx = header.index("route_id")
+                route_short_name_idx = header.index("route_short_name")
+                route_long_name_idx = header.index("route_long_name") if "route_long_name" in header else None
+                route_desc_idx = header.index("route_desc") if "route_desc" in header else None
+                route_type_idx = header.index("route_type") if "route_type" in header else None
+            except ValueError as e:
+                print(f"Error: Required column not found in routes.txt: {e}")
+                raise
+
+            for line in lines[1:]:
+                parts = line.split(",")
+                if len(parts) < max(i for i in [route_id_idx, route_short_name_idx] if i is not None) + 1:
+                    continue
+
+                try:
+                    route_id = parts[route_id_idx].strip().strip('"')
+                    route_short_name = parts[route_short_name_idx].strip().strip('"')
+                    route_long_name = parts[route_long_name_idx].strip().strip('"') if route_long_name_idx else ""
+                    route_desc = parts[route_desc_idx].strip().strip('"') if route_desc_idx and len(parts) > route_desc_idx else ""
+                    route_type = parts[route_type_idx].strip().strip('"') if route_type_idx and len(parts) > route_type_idx else ""
+                except (ValueError, IndexError):
+                    continue
+
+                routes[route_id] = {
+                    "route_id": route_id,
+                    "route_short_name": route_short_name,
+                    "route_long_name": route_long_name,
+                    "route_desc": route_desc,
+                    "route_type": route_type
+                }
+                total_routes += 1
+
+    print(f"[OK] Parsed {total_routes:,} routes")
+    return routes
+
+
+def parse_trips(zip_path: Path) -> Dict[str, Dict]:
+    """Parse trips.txt from GTFS zip.
+
+    Args:
+        zip_path: Path to the GTFS zip file
+
+    Returns:
+        Dictionary mapping trip_id to trip info
+
+    Example output:
+        {
+            "123456": {
+                "trip_id": "123456",
+                "route_id": "7021",
+                "trip_headsign": "Tel Aviv",
+                "direction_id": "0"
+            },
+            ...
+        }
+    """
+    print("Parsing trips.txt...")
+
+    trips = {}
+    total_trips = 0
+
+    with zipfile.ZipFile(zip_path) as zf:
+        with zf.open("trips.txt", "r") as f:
+            lines = f.read().decode("utf-8-sig").splitlines()
+            header = lines[0].split(",")
+
+            try:
+                trip_id_idx = header.index("trip_id")
+                route_id_idx = header.index("route_id")
+                trip_headsign_idx = header.index("trip_headsign") if "trip_headsign" in header else None
+                direction_id_idx = header.index("direction_id") if "direction_id" in header else None
+            except ValueError as e:
+                print(f"Error: Required column not found in trips.txt: {e}")
+                raise
+
+            for line in lines[1:]:
+                parts = line.split(",")
+                if len(parts) < max(i for i in [trip_id_idx, route_id_idx] if i is not None) + 1:
+                    continue
+
+                try:
+                    trip_id = parts[trip_id_idx].strip().strip('"')
+                    route_id = parts[route_id_idx].strip().strip('"')
+                    trip_headsign = parts[trip_headsign_idx].strip().strip('"') if trip_headsign_idx and len(parts) > trip_headsign_idx else ""
+                    direction_id = parts[direction_id_idx].strip().strip('"') if direction_id_idx and len(parts) > direction_id_idx else ""
+                except (ValueError, IndexError):
+                    continue
+
+                trips[trip_id] = {
+                    "trip_id": trip_id,
+                    "route_id": route_id,
+                    "trip_headsign": trip_headsign,
+                    "direction_id": direction_id
+                }
+                total_trips += 1
+
+    print(f"[OK] Parsed {total_trips:,} trips")
+    return trips
+
+
+def parse_stop_times(zip_path: Path) -> Dict[str, set]:
+    """Parse stop_times.txt to get stop-to-trip mappings.
+
+    Args:
+        zip_path: Path to the GTFS zip file
+
+    Returns:
+        Dictionary mapping stop_id to set of trip_ids
+
+    Note: This file is very large (~millions of rows), so we only store
+    the mapping of stops to trips, not full schedule data.
+    """
+    print("Parsing stop_times.txt (this may take a while)...")
+
+    stop_trips = defaultdict(set)
+    total_stop_times = 0
+
+    with zipfile.ZipFile(zip_path) as zf:
+        with zf.open("stop_times.txt", "r") as f:
+            lines = f.read().decode("utf-8-sig").splitlines()
+            header = lines[0].split(",")
+
+            try:
+                trip_id_idx = header.index("trip_id")
+                stop_id_idx = header.index("stop_id")
+            except ValueError as e:
+                print(f"Error: Required column not found in stop_times.txt: {e}")
+                raise
+
+            for line in lines[1:]:
+                parts = line.split(",")
+                if len(parts) < max(trip_id_idx, stop_id_idx) + 1:
+                    continue
+
+                try:
+                    trip_id = parts[trip_id_idx].strip().strip('"')
+                    stop_id = parts[stop_id_idx].strip().strip('"')
+                except (ValueError, IndexError):
+                    continue
+
+                stop_trips[stop_id].add(trip_id)
+                total_stop_times += 1
+
+    print(f"[OK] Parsed {total_stop_times:,} stop_times")
+    print(f"[OK] Found {len(stop_trips):,} stops with trip associations")
+    return stop_trips
+
+
+def build_routes_index(stops_data: Dict, routes: Dict, trips: Dict, stop_trips: Dict) -> Dict:
+    """Build routes index mapping stations to their routes and headsigns.
+
+    Args:
+        stops_data: Cities index from parse_stops
+        routes: Routes data from parse_routes
+        trips: Trips data from parse_trips
+        stop_trips: Stop-to-trip mappings from parse_stop_times
+
+    Returns:
+        Dictionary mapping station_id to route information
+
+    Example output:
+        {
+            "stations": {
+                "12664": {
+                    "name": "Station Name",
+                    "routes": [
+                        {
+                            "route_id": "7021",
+                            "route_short_name": "1",
+                            "route_long_name": "City Center - Airport",
+                            "trips": [
+                                {"trip_headsign": "Airport", "direction_id": "0"},
+                                {"trip_headsign": "City Center", "direction_id": "1"}
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+    """
+    print("Building routes index...")
+
+    routes_index = {"stations": {}}
+    total_stations_with_routes = 0
+
+    # Iterate through all cities and stations
+    for city_data in stops_data.values():
+        for station in city_data["stations"]:
+            station_id = station["id"]
+            station_name = station["name"]
+
+            # Get all trips for this station
+            trip_ids = stop_trips.get(station_id, set())
+            if not trip_ids:
+                continue
+
+            # Group trips by route
+            routes_by_id = defaultdict(list)
+            for trip_id in trip_ids:
+                trip_data = trips.get(trip_id)
+                if not trip_data:
+                    continue
+
+                route_id = trip_data["route_id"]
+                trip_headsign = trip_data["trip_headsign"]
+                direction_id = trip_data["direction_id"]
+
+                # Add trip to route group
+                routes_by_id[route_id].append({
+                    "trip_headsign": trip_headsign,
+                    "direction_id": direction_id
+                })
+
+            if not routes_by_id:
+                continue
+
+            # Build route list for this station
+            station_routes = []
+            for route_id, trip_list in routes_by_id.items():
+                route_data = routes.get(route_id)
+                if not route_data:
+                    continue
+
+                # Deduplicate trip headsigns (keep unique headsigns per direction)
+                unique_trips = {}
+                for trip in trip_list:
+                    key = (trip["trip_headsign"], trip["direction_id"])
+                    if key not in unique_trips:
+                        unique_trips[key] = trip
+
+                station_routes.append({
+                    "route_id": route_id,
+                    "route_short_name": route_data["route_short_name"],
+                    "route_long_name": route_data["route_long_name"],
+                    "trips": list(unique_trips.values())
+                })
+
+            # Add station to routes index
+            routes_index["stations"][station_id] = {
+                "name": station_name,
+                "routes": station_routes
+            }
+            total_stations_with_routes += 1
+
+    print(f"[OK] Built routes index for {total_stations_with_routes:,} stations")
+    return routes_index
+
+
 def save_index(cities_index: Dict, output_path: Path):
     """Save cities index to JSON file.
 
@@ -324,11 +606,41 @@ def save_index(cities_index: Dict, output_path: Path):
     print(f"[OK] Saved {size_kb:.2f} KB")
 
 
-def print_statistics(cities_index: Dict):
+def save_routes_index(routes_index: Dict, output_path: Path):
+    """Save routes index to compressed JSON file.
+
+    Args:
+        routes_index: Dictionary of routes data
+        output_path: Path to save the JSON.gz file
+    """
+    print(f"Saving routes index to {output_path}...")
+
+    # Convert to JSON
+    json_content = json.dumps(
+        routes_index,
+        ensure_ascii=False,  # Preserve Hebrew characters
+        indent=None,  # Compact format for compression
+        sort_keys=True,
+    )
+
+    # Compress with gzip
+    compressed = gzip.compress(json_content.encode("utf-8"))
+
+    # Write to file
+    output_path.write_bytes(compressed)
+
+    original_size_kb = len(json_content) / 1024
+    compressed_size_kb = len(compressed) / 1024
+    ratio = (1 - compressed_size_kb / original_size_kb) * 100
+    print(f"[OK] Saved {compressed_size_kb:.2f} KB (compressed from {original_size_kb:.2f} KB, {ratio:.1f}% reduction)")
+
+
+def print_statistics(cities_index: Dict, routes_index: Dict = None):
     """Print statistics about the parsed data.
 
     Args:
         cities_index: Dictionary of city data
+        routes_index: Optional dictionary of routes data
     """
     print("\n" + "=" * 60)
     print("GTFS Data Statistics")
@@ -349,6 +661,11 @@ def print_statistics(cities_index: Dict):
         station_count = len(city_data["stations"])
         print(f"  {i:2d}. {city_name:20s} - {station_count:,} stations")
 
+    if routes_index:
+        total_routes = sum(len(station["routes"]) for station in routes_index.get("stations", {}).values())
+        print(f"\nTotal Stations with Routes: {len(routes_index.get('stations', {})):,}")
+        print(f"Total Route Associations: {total_routes:,}")
+
     print("=" * 60 + "\n")
 
 
@@ -364,19 +681,32 @@ async def main():
         # Step 2: Parse stops and build city index
         cities_index = parse_stops(zip_path)
 
-        # Step 3: Save index to JSON
-        output_path = OUTPUT_DIR / CITIES_INDEX_FILE
-        save_index(cities_index, output_path)
+        # Step 3: Parse routes, trips, and stop_times for routes index
+        routes = parse_routes(zip_path)
+        trips = parse_trips(zip_path)
+        stop_trips = parse_stop_times(zip_path)
 
-        # Step 4: Print statistics
-        print_statistics(cities_index)
+        # Step 4: Build routes index
+        routes_index = build_routes_index(cities_index, routes, trips, stop_trips)
 
-        # Step 5: Cleanup zip file
+        # Step 5: Save cities index to JSON
+        cities_output = OUTPUT_DIR / CITIES_INDEX_FILE
+        save_index(cities_index, cities_output)
+
+        # Step 6: Save routes index to compressed JSON
+        routes_output = OUTPUT_DIR / "routes_index.json.gz"
+        save_routes_index(routes_index, routes_output)
+
+        # Step 7: Print statistics
+        print_statistics(cities_index, routes_index)
+
+        # Step 8: Cleanup zip file
         zip_path.unlink()
         print("[OK] Cleaned up temporary files")
 
         print("\n[SUCCESS] GTFS data update complete!")
-        print(f"   Index file: {output_path}")
+        print(f"   Cities index: {cities_output}")
+        print(f"   Routes index: {routes_output}")
 
         return 0
 
