@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
@@ -156,7 +156,7 @@ class SilentBusSensor(CoordinatorEntity, SensorEntity):
         self._attr_name = f"Line {line_number}"
 
     @property
-    def native_value(self) -> int | None:
+    def native_value(self) -> Optional[int]:
         """Return the state of the sensor.
 
         Returns:
@@ -273,7 +273,7 @@ class SilentBusTrainSensor(CoordinatorEntity, SensorEntity):
         self._attr_name = "Next Train"
 
     @property
-    def native_value(self) -> int | None:
+    def native_value(self) -> Optional[int]:
         """Return the state of the sensor.
 
         Returns:

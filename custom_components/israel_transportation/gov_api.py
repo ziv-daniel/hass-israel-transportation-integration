@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 import aiohttp
 from aiohttp import ClientTimeout
@@ -32,7 +32,7 @@ class ApiTimeoutError(GovApiError):
 class GovApiClient:
     """API client for bus.gov.il service."""
 
-    def __init__(self, session: aiohttp.ClientSession | None = None) -> None:
+    def __init__(self, session: Optional[aiohttp.ClientSession] = None) -> None:
         """Initialize the API client.
 
         Args:
@@ -112,7 +112,7 @@ class GovApiClient:
         self,
         makat: str,
         locale: str = "he",
-        lines: list[str] | None = None,
+        lines: Optional[list[str]] = None,
     ) -> list[dict[str, Any]]:
         """Get real-time bus arrivals for a station.
 

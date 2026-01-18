@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Optional
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
@@ -38,21 +38,21 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         self,
         hass: HomeAssistant,
         *,
-        api_client: BusNearbyApiClient | None = None,  # Keep for trains
-        gov_api_client: GovApiClient | None = None,  # New for bus/light_rail
+        api_client: Optional[BusNearbyApiClient] = None,  # Keep for trains
+        gov_api_client: Optional[GovApiClient] = None,  # New for bus/light_rail
         update_interval: timedelta,
         config_entry=None,
         max_arrivals: int = DEFAULT_MAX_ARRIVALS,
         transport_type: str = TRANSPORT_TYPE_BUS,
         # Bus/Light Rail parameters
-        station_id: str | None = None,
-        station_name: str | None = None,
-        bus_lines: list[str] | None = None,
+        station_id: Optional[str] = None,
+        station_name: Optional[str] = None,
+        bus_lines: Optional[list[str]] = None,
         # Train parameters
-        from_station: str | None = None,
-        to_station: str | None = None,
-        from_station_name: str | None = None,
-        to_station_name: str | None = None,
+        from_station: Optional[str] = None,
+        to_station: Optional[str] = None,
+        from_station_name: Optional[str] = None,
+        to_station_name: Optional[str] = None,
     ) -> None:
         """Initialize the coordinator.
 
@@ -96,7 +96,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             self._station_display = None
 
         # GTFS direction cache for fallback when API doesn't provide direction
-        self._gtfs_direction_cache: dict[tuple[str, str], str | None] = {}
+        self._gtfs_direction_cache: dict[tuple[str, str], Optional[str]] = {}
 
         # Generate unique coordinator name
         if transport_type == TRANSPORT_TYPE_TRAIN:
@@ -564,7 +564,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             )
             self.update_interval = new_interval
 
-    def get_line_data(self, line_number: str) -> list[dict[str, Any]] | None:
+    def get_line_data(self, line_number: str) -> Optional[list[dict[str, Any]]]:
         """Get arrival data for a specific line.
 
         Args:
@@ -577,7 +577,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             return None
         return self.data.get(line_number)
 
-    def get_next_arrival(self, line_number: str) -> dict[str, Any] | None:
+    def get_next_arrival(self, line_number: str) -> Optional[dict[str, Any]]:
         """Get next arrival for a specific line.
 
         Args:

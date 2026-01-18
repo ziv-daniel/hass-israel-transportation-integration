@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 import aiohttp
 from aiohttp import ClientError, ClientTimeout
@@ -45,7 +45,7 @@ class InvalidResponseError(BusNearbyApiError):
 class BusNearbyApiClient:
     """API client for BusNearby service."""
 
-    def __init__(self, session: aiohttp.ClientSession | None = None) -> None:
+    def __init__(self, session: Optional[aiohttp.ClientSession] = None) -> None:
         """Initialize the API client.
 
         Args:
@@ -78,7 +78,7 @@ class BusNearbyApiClient:
     async def _make_request(
         self,
         url: str,
-        params: dict[str, Any] | None = None,
+        params: Optional[dict[str, Any]] = None,
         retry_count: int = 0,
     ) -> dict[str, Any]:
         """Make HTTP request with retry logic.
@@ -255,7 +255,7 @@ class BusNearbyApiClient:
     async def get_stop_times(
         self,
         stop_id: str,
-        bus_lines: list[str] | None = None,
+        bus_lines: Optional[list[str]] = None,
         number_of_departures: int = 1,
         time_range: int = 86400,
     ) -> list[dict[str, Any]]:

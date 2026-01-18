@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 import aiohttp
 import voluptuous as vol
@@ -20,10 +20,6 @@ from .api import (
 )
 from .gov_api import GovApiClient, ApiConnectionError as GovApiConnectionError
 from homeassistant.helpers.selector import (
-    SelectOptionDict,
-    SelectSelector,
-    SelectSelectorConfig,
-    SelectSelectorMode,
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
@@ -94,17 +90,17 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def __init__(self) -> None:
         """Initialize the config flow."""
-        self._station_id: str | None = None
-        self._station_name: str | None = None
-        self._transport_type: str | None = None
-        self._from_station: str | None = None
-        self._to_station: str | None = None
-        self._from_station_name: str | None = None
-        self._to_station_name: str | None = None
-        self._selected_city: str | None = None
+        self._station_id: Optional[str] = None
+        self._station_name: Optional[str] = None
+        self._transport_type: Optional[str] = None
+        self._from_station: Optional[str] = None
+        self._to_station: Optional[str] = None
+        self._from_station_name: Optional[str] = None
+        self._to_station_name: Optional[str] = None
+        self._selected_city: Optional[str] = None
 
     async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         """Handle the initial step - transport type selection.
 
@@ -147,7 +143,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_station_selection_method(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         """Handle station selection method choice.
 
@@ -223,7 +219,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_select_city(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         """Handle city selection from GTFS data.
 
@@ -241,18 +237,42 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """
         errors: dict[str, str] = {}
 
+        _LOGGER.info("=== async_step_select_city ENTRY ===")
+        _LOGGER.info("user_input=%s", user_input)
+        _LOGGER.info("user_input type=%s", type(user_input))
+
         if user_input is not None:
-            city_id = user_input["city_id"]
+            try:
+                city_input = user_input.get("city_id", "").strip()
+                _LOGGER.info("Received city_input: %r (type: %s, len: %d)", city_input, type(city_input), len(city_input) if city_input else 0)
 
-            # Handle special options
-            if city_id == "manual":
-                return await self.async_step_station_config()
-            if city_id == "show_all":
-                return await self.async_step_select_city_all()
+                # Extract city_id from formatted string like "City Name [city_id]"
+                import re
+                match = re.search(r'\[([^\]]+)\]$', city_input)
+                if match:
+                    city_id = match.group(1)
+                    _LOGGER.info("Extracted city_id: %r from input", city_id)
+                else:
+                    # Fallback: use input directly (might be manual entry)
+                    city_id = city_input
+                    _LOGGER.info("Using raw input as city_id: %r", city_id)
 
-            # Save selected city and move to station selection
-            self._selected_city = city_id
-            return await self.async_step_select_station()
+                # Handle special options
+                if city_id == "manual" or "manual" in city_input.lower():
+                    _LOGGER.info("Manual entry selected")
+                    return await self.async_step_station_config()
+                if city_id == "show_all" or "show all" in city_input.lower():
+                    _LOGGER.info("Show all cities selected")
+                    return await self.async_step_select_city_all()
+
+                # Save selected city and move to station selection
+                _LOGGER.info("Setting _selected_city to: %r", city_id)
+                self._selected_city = city_id
+                _LOGGER.info("Calling async_step_select_station()")
+                return await self.async_step_select_station()
+            except Exception as e:
+                _LOGGER.error("Exception in async_step_select_city: %s", str(e), exc_info=True)
+                errors["base"] = "unknown"
 
         # Get home location for proximity sorting
         home_lat = self.hass.config.latitude
@@ -266,45 +286,36 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # No GTFS data available, fall back to manual entry
             return await self.async_step_station_config()
 
-        # Build city options list for SelectSelector
-        city_options: list[SelectOptionDict] = []
+        # Build city options as autocomplete list
+        # Using TextSelector with autocomplete instead of vol.In to work around validation issues
+        autocomplete_list: list[str] = []
 
         # Add all cities (already sorted: nearby first with 📍, then alphabetical)
         for city in cities:
-            city_options.append(
-                SelectOptionDict(
-                    value=city["id"],
-                    label=city["name"],
-                )
-            )
+            # Format: "City Name (city_id)" to allow extraction of city_id later
+            autocomplete_list.append(f"{city['name']} [{city['id']}]")
 
         # Add special options at the end
-        city_options.append(
-            SelectOptionDict(
-                value="show_all",
-                label="📋 Show all cities...",
-            )
-        )
-        city_options.append(
-            SelectOptionDict(
-                value="manual",
-                label="🔍 Enter station ID manually...",
-            )
-        )
+        autocomplete_list.append("📋 Show all cities... [show_all]")
+        autocomplete_list.append("🔍 Enter station ID manually... [manual]")
 
-        # Use SelectSelector with dropdown mode for searchable list
+        _LOGGER.info("Built autocomplete_list with %d entries", len(autocomplete_list))
+        _LOGGER.info("First 5 entries: %s", autocomplete_list[:5])
+
+        # Use TextSelector with autocomplete - same pattern as station selection which works
         data_schema = vol.Schema(
             {
-                vol.Required("city_id"): SelectSelector(
-                    SelectSelectorConfig(
-                        options=city_options,
-                        mode=SelectSelectorMode.DROPDOWN,
-                        custom_value=False,
-                        sort=False,  # We already sorted it ourselves
+                vol.Required("city_id"): TextSelector(
+                    TextSelectorConfig(
+                        type=TextSelectorType.TEXT,
+                        autocomplete=autocomplete_list,
+                        multiline=False,
                     )
                 ),
             }
         )
+
+        _LOGGER.info("Using TextSelector with autocomplete for city selection")
 
         return self.async_show_form(
             step_id="select_city",
@@ -318,7 +329,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_select_city_all(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         """Handle selection from ALL cities (no filtering).
 
@@ -331,9 +342,17 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            city_id = user_input["city_id"]
+            import re
+            city_input = user_input.get("city_id", "").strip()
 
-            if city_id == "manual":
+            # Extract city_id from formatted string like "City Name [city_id]"
+            match = re.search(r'\[([^\]]+)\]$', city_input)
+            if match:
+                city_id = match.group(1)
+            else:
+                city_id = city_input
+
+            if city_id == "manual" or "manual" in city_input.lower():
                 return await self.async_step_station_config()
 
             self._selected_city = city_id
@@ -345,32 +364,22 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not cities:
             return await self.async_step_station_config()
 
-        # Build options list
-        city_options: list[SelectOptionDict] = []
+        # Build city options as autocomplete list
+        autocomplete_list: list[str] = []
         for city in cities:
-            city_options.append(
-                SelectOptionDict(
-                    value=city["id"],
-                    label=city["name"],
-                )
-            )
+            autocomplete_list.append(f"{city['name']} [{city['id']}]")
 
         # Add manual entry option
-        city_options.append(
-            SelectOptionDict(
-                value="manual",
-                label="🔍 Enter station ID manually...",
-            )
-        )
+        autocomplete_list.append("🔍 Enter station ID manually... [manual]")
 
+        # Use TextSelector with autocomplete - same pattern as station selection
         data_schema = vol.Schema(
             {
-                vol.Required("city_id"): SelectSelector(
-                    SelectSelectorConfig(
-                        options=city_options,
-                        mode=SelectSelectorMode.DROPDOWN,
-                        custom_value=False,
-                        sort=False,
+                vol.Required("city_id"): TextSelector(
+                    TextSelectorConfig(
+                        type=TextSelectorType.TEXT,
+                        autocomplete=autocomplete_list,
+                        multiline=False,
                     )
                 ),
             }
@@ -388,7 +397,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_select_station(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         """Handle station selection from chosen city.
 
@@ -398,6 +407,9 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         Returns:
             Flow result
         """
+        _LOGGER.info("=== async_step_select_station ENTRY ===")
+        _LOGGER.info("user_input=%s", user_input)
+        _LOGGER.info("_selected_city=%s", self._selected_city)
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -469,10 +481,18 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors["base"] = ERROR_STATION_NOT_FOUND
 
         # Get stations for selected city
-        stations = get_stations_for_city(self._selected_city or "Other")
+        try:
+            _LOGGER.info("Fetching stations for city: %r", self._selected_city or "Other")
+            stations = get_stations_for_city(self._selected_city or "Other")
+            _LOGGER.info("Found %d stations for city %r", len(stations), self._selected_city)
+        except Exception as e:
+            _LOGGER.error("Error getting stations for city %r: %s", self._selected_city, str(e), exc_info=True)
+            errors["base"] = "unknown"
+            stations = []
 
         if not stations:
             # No stations found, fall back to manual entry
+            _LOGGER.warning("No stations found for city %r, falling back to manual entry", self._selected_city)
             return await self.async_step_station_config()
 
         # Build autocomplete list with TextSelector (no 100-station limit!)
@@ -512,7 +532,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     def _find_station_by_input(
         self, stations: list[dict], user_input: str
-    ) -> dict | None:
+    ) -> Optional[dict]:
         """Find station by ID or name from user input.
 
         Args:
@@ -559,7 +579,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return None
 
     async def async_step_station_config(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         """Handle station configuration for bus and light rail.
 
@@ -629,7 +649,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_train_select_from(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         """Handle FROM train station selection from dropdown.
 
@@ -688,7 +708,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_train_select_to(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         """Handle TO train station selection from dropdown.
 
@@ -784,7 +804,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_train_config(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         """Handle train configuration (from/to stations).
 
@@ -893,7 +913,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_bus_lines(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         """Handle bus lines selection step.
 
@@ -978,7 +998,7 @@ class SilentBusOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow for Silent Bus."""
 
     async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
+        self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
         """Manage the options.
 

@@ -306,8 +306,8 @@ async def async_load_cities_index() -> Dict:
 
 
 def get_cities_list(
-    home_lat: float | None = None,
-    home_lon: float | None = None,
+    home_lat: Optional[float] = None,
+    home_lon: Optional[float] = None,
     min_stations: int = 1,
     max_cities: int = 9999,
     top_cities_count: int = 3,
