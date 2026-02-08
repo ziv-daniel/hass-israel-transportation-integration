@@ -723,6 +723,9 @@ async def test_options_flow_update_lines(hass: HomeAssistant):
     """Test updating bus lines through options flow."""
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+    # Import config_flow to register handler in HANDLERS registry
+    import custom_components.israel_transportation.config_flow  # noqa: F401
+
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
@@ -765,6 +768,9 @@ async def test_options_flow_update_lines(hass: HomeAssistant):
 async def test_options_flow_update_interval(hass: HomeAssistant):
     """Test updating scan interval and max arrivals through options flow."""
     from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    # Import config_flow to register handler in HANDLERS registry
+    import custom_components.israel_transportation.config_flow  # noqa: F401
 
     entry = MockConfigEntry(
         domain=DOMAIN,

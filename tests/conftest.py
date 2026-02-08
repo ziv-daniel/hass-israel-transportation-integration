@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import socket as socket_module
+import sys
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -23,11 +25,64 @@ from custom_components.israel_transportation.const import (
 
 pytest_plugins = "pytest_homeassistant_custom_component"
 
+# ---------------------------------------------------------------------------
+# Windows socket workaround
+# ---------------------------------------------------------------------------
+# On Windows, asyncio event loops need socket.socketpair() for internal
+# self-pipe communication. pytest-socket blocks socket.socket() but only
+# allows Unix sockets (which don't exist on Windows). Fix: save the
+# original socketpair (which uses the real socket internally) and replace
+# the module-level function so it always works regardless of socket guard.
+if sys.platform == "win32":
+    _real_socket_class = socket_module.socket
+    _original_socketpair = socket_module.socketpair
+
+    def _unguarded_socketpair(family=socket_module.AF_INET, type=socket_module.SOCK_STREAM, proto=0):
+        """Create a socket pair bypassing pytest-socket guard."""
+        saved = socket_module.socket
+        try:
+            socket_module.socket = _real_socket_class
+            return _original_socketpair(family, type, proto)
+        finally:
+            socket_module.socket = saved
+
+    socket_module.socketpair = _unguarded_socketpair
+
+
+# ---------------------------------------------------------------------------
+# Standard autouse fixtures
+# ---------------------------------------------------------------------------
+
 
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     """Enable custom integrations for all tests."""
     return
+
+
+@pytest.fixture(autouse=True)
+def mock_gtfs_functions():
+    """Mock GTFS filesystem functions to prevent FileNotFoundError in all tests.
+
+    The coordinator constructor calls get_station_display_name() which reads
+    GTFS files from disk. Mock globally so tests don't need actual files.
+    """
+    with (
+        patch(
+            "custom_components.israel_transportation.coordinator.get_station_display_name",
+            return_value="Test Station [24068]",
+        ),
+        patch(
+            "custom_components.israel_transportation.coordinator.get_route_headsign",
+            return_value=None,
+        ),
+    ):
+        yield
+
+
+# ---------------------------------------------------------------------------
+# Mock API clients
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
@@ -76,7 +131,9 @@ def mock_api_client():
 @pytest.fixture
 def mock_gov_api_client():
     """Mock GovApiClient for bus/light rail tests."""
-    with patch("custom_components.israel_transportation.gov_api.GovApiClient") as mock:
+    with patch(
+        "custom_components.israel_transportation.gov_api.GovApiClient"
+    ) as mock:
         client = mock.return_value
         client.validate_station = AsyncMock(return_value=True)
         client.get_station = AsyncMock(
@@ -113,6 +170,11 @@ def mock_gov_api_client():
         yield client
 
 
+# ---------------------------------------------------------------------------
+# Mock config entries
+# ---------------------------------------------------------------------------
+
+
 @pytest.fixture
 def mock_config_entry():
     """Mock config entry for bus transport."""
@@ -132,17 +194,30 @@ def mock_config_entry():
 
 @pytest.fixture
 def simple_mock_config_entry(hass):
-    """Simple mock config entry for coordinator tests."""
-    from homeassistant.config_entries import ConfigEntryState
+    """Simple mock config entry for coordinator tests.
 
+    Includes full bus config data so coordinator construction succeeds.
+    Uses async_refresh() (not async_config_entry_first_refresh) so no
+    special entry state is needed.
+    """
     entry = MockConfigEntry(
         domain=DOMAIN,
-        data={},
+        data={
+            CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS,
+            CONF_STATION_ID: "24068",
+            CONF_STATION_NAME: "Arlozorov Terminal",
+            CONF_BUS_LINES: ["249", "40"],
+            CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
+            CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
+        },
     )
     entry.add_to_hass(hass)
-    # Set entry state to SETUP_IN_PROGRESS to allow async_config_entry_first_refresh()
-    entry._async_set_state(hass, ConfigEntryState.SETUP_IN_PROGRESS, "")
     return entry
+
+
+# ---------------------------------------------------------------------------
+# Integration setup helper
+# ---------------------------------------------------------------------------
 
 
 @pytest.fixture
