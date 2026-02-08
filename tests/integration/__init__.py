@@ -1,1 +1,1 @@
-"""Integration tests for Silent Bus."""
+"""Integration tests for Israel Transportation."""

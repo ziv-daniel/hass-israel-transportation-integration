@@ -1,4 +1,4 @@
-"""DataUpdateCoordinator for Silent Bus integration."""
+"""DataUpdateCoordinator for Israel Transportation integration."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class SilentBusCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching Silent Bus data."""
+    """Class to manage fetching Israel Transportation data."""
 
     def __init__(
         self,
@@ -253,7 +253,9 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             if not direction:
                 cache_key = (self.station_id, line_number)
                 if cache_key in self._gtfs_direction_cache:
-                    direction = self._gtfs_direction_cache[cache_key] or f"Line {line_number}"
+                    direction = (
+                        self._gtfs_direction_cache[cache_key] or f"Line {line_number}"
+                    )
                 else:
                     gtfs_direction = get_route_headsign(self.station_id, line_number)
                     self._gtfs_direction_cache[cache_key] = gtfs_direction
@@ -357,7 +359,11 @@ class SilentBusCoordinator(DataUpdateCoordinator):
 
             # Get platform and train number from raw data
             platform = first_train.platform if hasattr(first_train, "platform") else ""
-            train_number = first_train.data.get("trainNumber", "") if hasattr(first_train, "data") else ""
+            train_number = (
+                first_train.data.get("trainNumber", "")
+                if hasattr(first_train, "data")
+                else ""
+            )
 
             # Calculate total duration
             duration_minutes = 0
@@ -467,7 +473,9 @@ class SilentBusCoordinator(DataUpdateCoordinator):
                 # Check cache first
                 cache_key = (self.station_id, line_number)
                 if cache_key in self._gtfs_direction_cache:
-                    direction = self._gtfs_direction_cache[cache_key] or f"Line {line_number}"
+                    direction = (
+                        self._gtfs_direction_cache[cache_key] or f"Line {line_number}"
+                    )
                 else:
                     # Try GTFS fallback
                     gtfs_direction = get_route_headsign(self.station_id, line_number)

@@ -1,9 +1,8 @@
-"""Sensor platform for Silent Bus integration."""
+"""Sensor platform for Israel Transportation integration."""
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 from typing import Any, Optional
 
 from homeassistant.components.sensor import (
@@ -53,7 +52,7 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up Silent Bus sensors based on a config entry.
+    """Set up Israel Transportation sensors based on a config entry.
 
     Args:
         hass: Home Assistant instance
@@ -101,13 +100,13 @@ async def async_setup_entry(
     async_add_entities(entities, True)
 
     _LOGGER.info(
-        "Set up %s Silent Bus sensors",
+        "Set up %s Israel Transportation sensors",
         len(entities),
     )
 
 
 class SilentBusSensor(CoordinatorEntity, SensorEntity):
-    """Representation of a Silent Bus sensor."""
+    """Representation of a Israel Transportation sensor."""
 
     _attr_has_entity_name = True
     _attr_device_class = SensorDeviceClass.DURATION
@@ -148,7 +147,7 @@ class SilentBusSensor(CoordinatorEntity, SensorEntity):
         self._attr_device_info = {
             "identifiers": {(DOMAIN, f"{station_id}")},
             "name": f"{transport_label} Station {station_name}",
-            "manufacturer": "Silent Bus",
+            "manufacturer": "Israel Transportation",
             "model": f"{transport_label} Stop",
         }
 
@@ -265,7 +264,7 @@ class SilentBusTrainSensor(CoordinatorEntity, SensorEntity):
         self._attr_device_info = {
             "identifiers": {(DOMAIN, f"train_{from_station}_{to_station}")},
             "name": f"Train Route {from_station_name} → {to_station_name}",
-            "manufacturer": "Silent Bus",
+            "manufacturer": "Israel Transportation",
             "model": "Train Route",
         }
 

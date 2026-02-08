@@ -1,4 +1,4 @@
-"""Integration tests for Silent Bus API endpoints."""
+"""Integration tests for Israel Transportation API endpoints."""
 
 from __future__ import annotations
 

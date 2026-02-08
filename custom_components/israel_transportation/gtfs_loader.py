@@ -57,9 +57,13 @@ async def download_gtfs_data_from_release() -> bool:
         async with aiohttp.ClientSession() as session:
             release_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
-            async with session.get(release_url, timeout=aiohttp.ClientTimeout(total=30)) as response:
+            async with session.get(
+                release_url, timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
                 if response.status != 200:
-                    _LOGGER.error(f"Failed to get latest release info: HTTP {response.status}")
+                    _LOGGER.error(
+                        f"Failed to get latest release info: HTTP {response.status}"
+                    )
                     return False
 
                 release_data = await response.json()
@@ -72,20 +76,28 @@ async def download_gtfs_data_from_release() -> bool:
                         break
 
                 if not gtfs_asset:
-                    _LOGGER.error(f"GTFS data asset '{GTFS_ASSET_NAME}' not found in release")
+                    _LOGGER.error(
+                        f"GTFS data asset '{GTFS_ASSET_NAME}' not found in release"
+                    )
                     return False
 
                 download_url = gtfs_asset["browser_download_url"]
                 _LOGGER.info(f"Downloading GTFS data from: {download_url}")
 
                 # Download the compressed file
-                async with session.get(download_url, timeout=aiohttp.ClientTimeout(total=120)) as download_response:
+                async with session.get(
+                    download_url, timeout=aiohttp.ClientTimeout(total=120)
+                ) as download_response:
                     if download_response.status != 200:
-                        _LOGGER.error(f"Failed to download GTFS data: HTTP {download_response.status}")
+                        _LOGGER.error(
+                            f"Failed to download GTFS data: HTTP {download_response.status}"
+                        )
                         return False
 
                     compressed_data = await download_response.read()
-                    _LOGGER.info(f"Downloaded {len(compressed_data)} bytes (compressed)")
+                    _LOGGER.info(
+                        f"Downloaded {len(compressed_data)} bytes (compressed)"
+                    )
 
         # Decompress the data
         try:
@@ -109,7 +121,9 @@ async def download_gtfs_data_from_release() -> bool:
             cities_data = json.loads(decompressed_data)
             city_count = len(cities_data)
             station_count = sum(len(city["stations"]) for city in cities_data.values())
-            _LOGGER.info(f"Successfully downloaded GTFS data: {city_count} cities, {station_count} stations")
+            _LOGGER.info(
+                f"Successfully downloaded GTFS data: {city_count} cities, {station_count} stations"
+            )
             return True
         except json.JSONDecodeError as e:
             _LOGGER.error(f"Downloaded GTFS data is not valid JSON: {e}")

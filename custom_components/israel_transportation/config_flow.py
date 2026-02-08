@@ -1,4 +1,4 @@
-"""Config flow for Silent Bus integration."""
+"""Config flow for Israel Transportation integration."""
 
 from __future__ import annotations
 
@@ -29,7 +29,6 @@ from .gtfs_loader import (
     async_load_cities_index,
     get_all_cities_list,
     get_cities_list,
-    get_cities_near_location,
     get_stations_for_city,
     is_gtfs_data_available,
 )
@@ -73,18 +72,20 @@ def get_train_stations_list() -> list[dict[str, str]]:
     for station_id, names in RAIL_STATIONS.items():
         hebrew_name = names.get("Heb", "")
         english_name = names.get("Eng", hebrew_name)
-        stations.append({
-            "id": str(station_id),
-            "name": f"{hebrew_name} - {english_name} ({station_id})",
-            "name_en": english_name,
-        })
+        stations.append(
+            {
+                "id": str(station_id),
+                "name": f"{hebrew_name} - {english_name} ({station_id})",
+                "name_en": english_name,
+            }
+        )
     # Sort by Hebrew name
     stations.sort(key=lambda x: x["name"])
     return stations
 
 
 class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Silent Bus."""
+    """Handle a config flow for Israel Transportation."""
 
     VERSION = 1
 
@@ -244,11 +245,17 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             try:
                 city_input = user_input.get("city_id", "").strip()
-                _LOGGER.info("Received city_input: %r (type: %s, len: %d)", city_input, type(city_input), len(city_input) if city_input else 0)
+                _LOGGER.info(
+                    "Received city_input: %r (type: %s, len: %d)",
+                    city_input,
+                    type(city_input),
+                    len(city_input) if city_input else 0,
+                )
 
                 # Extract city_id from formatted string like "City Name [city_id]"
                 import re
-                match = re.search(r'\[([^\]]+)\]$', city_input)
+
+                match = re.search(r"\[([^\]]+)\]$", city_input)
                 if match:
                     city_id = match.group(1)
                     _LOGGER.info("Extracted city_id: %r from input", city_id)
@@ -271,7 +278,9 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 _LOGGER.info("Calling async_step_select_station()")
                 return await self.async_step_select_station()
             except Exception as e:
-                _LOGGER.error("Exception in async_step_select_city: %s", str(e), exc_info=True)
+                _LOGGER.error(
+                    "Exception in async_step_select_city: %s", str(e), exc_info=True
+                )
                 errors["base"] = "unknown"
 
         # Get home location for proximity sorting
@@ -343,10 +352,11 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             import re
+
             city_input = user_input.get("city_id", "").strip()
 
             # Extract city_id from formatted string like "City Name [city_id]"
-            match = re.search(r'\[([^\]]+)\]$', city_input)
+            match = re.search(r"\[([^\]]+)\]$", city_input)
             if match:
                 city_id = match.group(1)
             else:
@@ -482,17 +492,29 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Get stations for selected city
         try:
-            _LOGGER.info("Fetching stations for city: %r", self._selected_city or "Other")
+            _LOGGER.info(
+                "Fetching stations for city: %r", self._selected_city or "Other"
+            )
             stations = get_stations_for_city(self._selected_city or "Other")
-            _LOGGER.info("Found %d stations for city %r", len(stations), self._selected_city)
+            _LOGGER.info(
+                "Found %d stations for city %r", len(stations), self._selected_city
+            )
         except Exception as e:
-            _LOGGER.error("Error getting stations for city %r: %s", self._selected_city, str(e), exc_info=True)
+            _LOGGER.error(
+                "Error getting stations for city %r: %s",
+                self._selected_city,
+                str(e),
+                exc_info=True,
+            )
             errors["base"] = "unknown"
             stations = []
 
         if not stations:
             # No stations found, fall back to manual entry
-            _LOGGER.warning("No stations found for city %r, falling back to manual entry", self._selected_city)
+            _LOGGER.warning(
+                "No stations found for city %r, falling back to manual entry",
+                self._selected_city,
+            )
             return await self.async_step_station_config()
 
         # Build autocomplete list with TextSelector (no 100-station limit!)
@@ -501,8 +523,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Create autocomplete suggestions (show all stations)
         autocomplete_list = [
-            f"{station['name']} ({station['id']})"
-            for station in sorted_stations
+            f"{station['name']} ({station['id']})" for station in sorted_stations
         ]
 
         # Add manual entry option
@@ -558,7 +579,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return None
 
         # Extract ID from formatted string like "Station Name (12345)"
-        id_match = re.search(r'\((\d+)\)$', user_input)
+        id_match = re.search(r"\((\d+)\)$", user_input)
         if id_match:
             station_id = id_match.group(1)
         else:
@@ -995,7 +1016,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class SilentBusOptionsFlow(config_entries.OptionsFlow):
-    """Handle options flow for Silent Bus."""
+    """Handle options flow for Israel Transportation."""
 
     async def async_step_init(
         self, user_input: Optional[dict[str, Any]] = None

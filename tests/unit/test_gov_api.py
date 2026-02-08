@@ -39,7 +39,9 @@ class TestGetStation:
             "Makat": 12665,
         }
 
-        with patch.object(GovApiClient, "_make_request", new_callable=AsyncMock) as mock_request:
+        with patch.object(
+            GovApiClient, "_make_request", new_callable=AsyncMock
+        ) as mock_request:
             mock_request.return_value = mock_response
             async with GovApiClient() as client:
                 result = await client.get_station("12665")
@@ -59,7 +61,9 @@ class TestGetStation:
             "Makat": 0,
         }
 
-        with patch.object(GovApiClient, "_make_request", new_callable=AsyncMock) as mock_request:
+        with patch.object(
+            GovApiClient, "_make_request", new_callable=AsyncMock
+        ) as mock_request:
             mock_request.return_value = mock_response
             async with GovApiClient() as client:
                 result = await client.get_station("99999")
@@ -79,7 +83,9 @@ class TestValidateStation:
             "Makat": 12665,
         }
 
-        with patch.object(GovApiClient, "get_station", new_callable=AsyncMock) as mock_get:
+        with patch.object(
+            GovApiClient, "get_station", new_callable=AsyncMock
+        ) as mock_get:
             mock_get.return_value = mock_response
             async with GovApiClient() as client:
                 result = await client.validate_station("12665")
@@ -94,7 +100,9 @@ class TestValidateStation:
             "Makat": 0,
         }
 
-        with patch.object(GovApiClient, "get_station", new_callable=AsyncMock) as mock_get:
+        with patch.object(
+            GovApiClient, "get_station", new_callable=AsyncMock
+        ) as mock_get:
             mock_get.return_value = mock_response
             async with GovApiClient() as client:
                 result = await client.validate_station("99999")
@@ -109,7 +117,9 @@ class TestValidateStation:
             "Makat": 0,
         }
 
-        with patch.object(GovApiClient, "get_station", new_callable=AsyncMock) as mock_get:
+        with patch.object(
+            GovApiClient, "get_station", new_callable=AsyncMock
+        ) as mock_get:
             mock_get.return_value = mock_response
             async with GovApiClient() as client:
                 result = await client.validate_station("99999")
@@ -144,7 +154,9 @@ class TestGetArrivals:
             },
         ]
 
-        with patch.object(GovApiClient, "_make_request", new_callable=AsyncMock) as mock_request:
+        with patch.object(
+            GovApiClient, "_make_request", new_callable=AsyncMock
+        ) as mock_request:
             mock_request.return_value = mock_response
             async with GovApiClient() as client:
                 result = await client.get_arrivals("12665")
@@ -157,7 +169,9 @@ class TestGetArrivals:
     @pytest.mark.asyncio
     async def test_get_arrivals_empty(self):
         """Test getting arrivals for station with no buses."""
-        with patch.object(GovApiClient, "_make_request", new_callable=AsyncMock) as mock_request:
+        with patch.object(
+            GovApiClient, "_make_request", new_callable=AsyncMock
+        ) as mock_request:
             mock_request.return_value = []
             async with GovApiClient() as client:
                 result = await client.get_arrivals("12665")
@@ -173,7 +187,9 @@ class TestGetArrivals:
             {"Shilut": "10", "MinutesToArrival": 12, "MinutesToArrivalList": [12]},
         ]
 
-        with patch.object(GovApiClient, "_make_request", new_callable=AsyncMock) as mock_request:
+        with patch.object(
+            GovApiClient, "_make_request", new_callable=AsyncMock
+        ) as mock_request:
             mock_request.return_value = mock_response
             async with GovApiClient() as client:
                 result = await client.get_arrivals("12665", lines=["1א", "10"])

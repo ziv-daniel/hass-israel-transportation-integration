@@ -1,4 +1,4 @@
-"""Integration tests for Silent Bus config flow covering all transport types."""
+"""Integration tests for Israel Transportation config flow covering all transport types."""
 
 from __future__ import annotations
 
@@ -10,7 +10,6 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.israel_transportation.api import (
-    ApiConnectionError,
     ApiTimeoutError,
 )
 from custom_components.israel_transportation.gov_api import (
@@ -126,7 +125,9 @@ async def test_bus_station_12664_validation(hass: HomeAssistant):
                 "Longitude": 34.7818,
             }
         )
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         # Navigate to station config
@@ -167,7 +168,9 @@ async def test_bus_station_valid_common_stations(hass: HomeAssistant):
                     "Makat": int(station_data["id"]),
                 }
             )
-            mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client.return_value
+            )
             mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
             # Navigate to station config
@@ -208,7 +211,9 @@ async def test_bus_station_invalid_rejected(hass: HomeAssistant):
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": None, "Makat": 0}
         )
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         # Navigate to station config
@@ -236,7 +241,9 @@ async def test_bus_station_api_timeout(hass: HomeAssistant):
         "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         # Mock API connection error
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
         mock_client.return_value.get_station = AsyncMock(
             side_effect=GovApiConnectionError("Connection failed")
@@ -269,7 +276,9 @@ async def test_bus_station_empty_response(hass: HomeAssistant):
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": None, "Makat": 0}
         )
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         # Navigate to station config
@@ -297,7 +306,9 @@ async def test_bus_lines_selection(hass: HomeAssistant):
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Test Station", "Makat": 24068}
         )
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         # Navigate to station config
@@ -332,7 +343,9 @@ async def test_bus_lines_validation_required(hass: HomeAssistant):
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Test Station", "Makat": 24068}
         )
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         # Navigate to station config
@@ -507,7 +520,9 @@ async def test_lightrail_station_validation(hass: HomeAssistant):
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Pisgat Ze'ev", "Makat": 30001}
         )
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         # Navigate to station config for light rail
@@ -536,7 +551,9 @@ async def test_lightrail_line_selection(hass: HomeAssistant):
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Pisgat Ze'ev", "Makat": 30001}
         )
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         # Navigate to station config for light rail
@@ -574,7 +591,9 @@ async def test_lightrail_api_response(hass: HomeAssistant):
                 "Longitude": 35.2167,
             }
         )
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         # Navigate to station config for light rail
@@ -666,7 +685,9 @@ async def test_already_configured_rejection(hass: HomeAssistant):
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Test Station", "Makat": 24068}
         )
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         # Navigate to station config
@@ -780,7 +801,9 @@ async def test_connection_error_handling(hass: HomeAssistant):
         "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         # Test GovApiConnectionError
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
         mock_client.return_value.get_station = AsyncMock(
             side_effect=GovApiConnectionError("Network error")
@@ -808,7 +831,9 @@ async def test_station_id_whitespace_handling(hass: HomeAssistant):
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Test Station", "Makat": 24068}
         )
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         # Navigate to station config
@@ -837,7 +862,9 @@ async def test_generic_exception_handling(hass: HomeAssistant):
         "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         # Simulate unexpected exception
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
         mock_client.return_value.get_station = AsyncMock(
             side_effect=ValueError("Unexpected error")

@@ -1,4 +1,4 @@
-"""Tests for the Silent Bus coordinator."""
+"""Tests for the Israel Transportation coordinator."""
 
 from __future__ import annotations
 

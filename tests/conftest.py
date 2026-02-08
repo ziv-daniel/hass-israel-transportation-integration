@@ -33,7 +33,9 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 @pytest.fixture
 def mock_api_client():
     """Mock BusNearbyApiClient for train tests."""
-    with patch("custom_components.israel_transportation.api.BusNearbyApiClient") as mock:
+    with patch(
+        "custom_components.israel_transportation.api.BusNearbyApiClient"
+    ) as mock:
         client = mock.return_value
         client.validate_station = AsyncMock(return_value=True)
         client.search_station = AsyncMock(
@@ -144,8 +146,10 @@ def simple_mock_config_entry(hass):
 
 
 @pytest.fixture
-async def setup_integration(hass: HomeAssistant, mock_config_entry, mock_gov_api_client):
-    """Set up the Silent Bus integration for bus/light rail."""
+async def setup_integration(
+    hass: HomeAssistant, mock_config_entry, mock_gov_api_client
+):
+    """Set up the Israel Transportation integration for bus/light rail."""
     mock_config_entry.add_to_hass(hass)
 
     with patch(

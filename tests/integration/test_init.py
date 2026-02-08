@@ -1,4 +1,4 @@
-"""Integration tests for Silent Bus."""
+"""Integration tests for Israel Transportation."""
 
 from __future__ import annotations
 
@@ -13,8 +13,6 @@ from custom_components.israel_transportation.const import (
     CONF_BUS_LINES,
     CONF_STATION_ID,
     DOMAIN,
-    CONF_TRANSPORT_TYPE,
-    TRANSPORT_TYPE_BUS,
 )
 
 
@@ -67,7 +65,9 @@ async def test_setup_failure_invalid_station(hass: HomeAssistant, mock_config_en
 
 
 @pytest.mark.asyncio
-async def test_reload_entry(hass: HomeAssistant, mock_config_entry, mock_gov_api_client):
+async def test_reload_entry(
+    hass: HomeAssistant, mock_config_entry, mock_gov_api_client
+):
     """Test reloading the config entry."""
     mock_config_entry.add_to_hass(hass)
 
@@ -88,7 +88,9 @@ async def test_reload_entry(hass: HomeAssistant, mock_config_entry, mock_gov_api
 
 
 @pytest.mark.asyncio
-async def test_sensors_created(hass: HomeAssistant, mock_config_entry, mock_gov_api_client):
+async def test_sensors_created(
+    hass: HomeAssistant, mock_config_entry, mock_gov_api_client
+):
     """Test that sensors are created for each bus line."""
     mock_config_entry.add_to_hass(hass)
 

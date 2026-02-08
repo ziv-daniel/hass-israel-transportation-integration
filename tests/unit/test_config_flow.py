@@ -1,4 +1,4 @@
-"""Tests for the Silent Bus config flow."""
+"""Tests for the Israel Transportation config flow."""
 
 from __future__ import annotations
 
@@ -9,8 +9,9 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
-from custom_components.israel_transportation.api import ApiConnectionError
-from custom_components.israel_transportation.gov_api import ApiConnectionError as GovApiConnectionError
+from custom_components.israel_transportation.gov_api import (
+    ApiConnectionError as GovApiConnectionError,
+)
 from custom_components.israel_transportation.const import (
     CONF_BUS_LINES,
     CONF_STATION_ID,
@@ -48,7 +49,9 @@ async def test_user_form_station_not_found(hass: HomeAssistant):
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": None, "Makat": 0}
         )
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         result = await hass.config_entries.flow.async_init(
@@ -90,7 +93,9 @@ async def test_user_form_cannot_connect(hass: HomeAssistant):
         "custom_components.israel_transportation.config_flow.GovApiClient"
     ) as mock_client:
         # GovApiConnectionError is caught and shown as cannot_connect
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
         mock_client.return_value.get_station = AsyncMock(
             side_effect=GovApiConnectionError("Test error")
@@ -138,7 +143,9 @@ async def test_user_form_success(hass: HomeAssistant):
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Test Station", "Makat": 24068}
         )
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         result = await hass.config_entries.flow.async_init(
@@ -181,7 +188,9 @@ async def test_bus_lines_form_no_lines(hass: HomeAssistant):
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Test Station", "Makat": 24068}
         )
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         result = await hass.config_entries.flow.async_init(
@@ -230,7 +239,9 @@ async def test_full_flow_success(hass: HomeAssistant):
         mock_client.return_value.get_station = AsyncMock(
             return_value={"Name": "Test Station", "Makat": 24068}
         )
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         result = await hass.config_entries.flow.async_init(
@@ -345,7 +356,9 @@ async def test_station_makat_used_directly(hass: HomeAssistant):
                 "Longitude": 34.596389,
             }
         )
-        mock_client.return_value.__aenter__ = AsyncMock(return_value=mock_client.return_value)
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
         mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         result = await hass.config_entries.flow.async_init(

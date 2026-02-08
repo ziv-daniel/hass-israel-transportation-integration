@@ -337,24 +337,50 @@ def parse_routes(zip_path: Path) -> Dict[str, Dict]:
             try:
                 route_id_idx = header.index("route_id")
                 route_short_name_idx = header.index("route_short_name")
-                route_long_name_idx = header.index("route_long_name") if "route_long_name" in header else None
-                route_desc_idx = header.index("route_desc") if "route_desc" in header else None
-                route_type_idx = header.index("route_type") if "route_type" in header else None
+                route_long_name_idx = (
+                    header.index("route_long_name")
+                    if "route_long_name" in header
+                    else None
+                )
+                route_desc_idx = (
+                    header.index("route_desc") if "route_desc" in header else None
+                )
+                route_type_idx = (
+                    header.index("route_type") if "route_type" in header else None
+                )
             except ValueError as e:
                 print(f"Error: Required column not found in routes.txt: {e}")
                 raise
 
             for line in lines[1:]:
                 parts = line.split(",")
-                if len(parts) < max(i for i in [route_id_idx, route_short_name_idx] if i is not None) + 1:
+                if (
+                    len(parts)
+                    < max(
+                        i for i in [route_id_idx, route_short_name_idx] if i is not None
+                    )
+                    + 1
+                ):
                     continue
 
                 try:
                     route_id = parts[route_id_idx].strip().strip('"')
                     route_short_name = parts[route_short_name_idx].strip().strip('"')
-                    route_long_name = parts[route_long_name_idx].strip().strip('"') if route_long_name_idx else ""
-                    route_desc = parts[route_desc_idx].strip().strip('"') if route_desc_idx and len(parts) > route_desc_idx else ""
-                    route_type = parts[route_type_idx].strip().strip('"') if route_type_idx and len(parts) > route_type_idx else ""
+                    route_long_name = (
+                        parts[route_long_name_idx].strip().strip('"')
+                        if route_long_name_idx
+                        else ""
+                    )
+                    route_desc = (
+                        parts[route_desc_idx].strip().strip('"')
+                        if route_desc_idx and len(parts) > route_desc_idx
+                        else ""
+                    )
+                    route_type = (
+                        parts[route_type_idx].strip().strip('"')
+                        if route_type_idx and len(parts) > route_type_idx
+                        else ""
+                    )
                 except (ValueError, IndexError):
                     continue
 
@@ -363,7 +389,7 @@ def parse_routes(zip_path: Path) -> Dict[str, Dict]:
                     "route_short_name": route_short_name,
                     "route_long_name": route_long_name,
                     "route_desc": route_desc,
-                    "route_type": route_type
+                    "route_type": route_type,
                 }
                 total_routes += 1
 
@@ -404,22 +430,37 @@ def parse_trips(zip_path: Path) -> Dict[str, Dict]:
             try:
                 trip_id_idx = header.index("trip_id")
                 route_id_idx = header.index("route_id")
-                trip_headsign_idx = header.index("trip_headsign") if "trip_headsign" in header else None
-                direction_id_idx = header.index("direction_id") if "direction_id" in header else None
+                trip_headsign_idx = (
+                    header.index("trip_headsign") if "trip_headsign" in header else None
+                )
+                direction_id_idx = (
+                    header.index("direction_id") if "direction_id" in header else None
+                )
             except ValueError as e:
                 print(f"Error: Required column not found in trips.txt: {e}")
                 raise
 
             for line in lines[1:]:
                 parts = line.split(",")
-                if len(parts) < max(i for i in [trip_id_idx, route_id_idx] if i is not None) + 1:
+                if (
+                    len(parts)
+                    < max(i for i in [trip_id_idx, route_id_idx] if i is not None) + 1
+                ):
                     continue
 
                 try:
                     trip_id = parts[trip_id_idx].strip().strip('"')
                     route_id = parts[route_id_idx].strip().strip('"')
-                    trip_headsign = parts[trip_headsign_idx].strip().strip('"') if trip_headsign_idx and len(parts) > trip_headsign_idx else ""
-                    direction_id = parts[direction_id_idx].strip().strip('"') if direction_id_idx and len(parts) > direction_id_idx else ""
+                    trip_headsign = (
+                        parts[trip_headsign_idx].strip().strip('"')
+                        if trip_headsign_idx and len(parts) > trip_headsign_idx
+                        else ""
+                    )
+                    direction_id = (
+                        parts[direction_id_idx].strip().strip('"')
+                        if direction_id_idx and len(parts) > direction_id_idx
+                        else ""
+                    )
                 except (ValueError, IndexError):
                     continue
 
@@ -427,7 +468,7 @@ def parse_trips(zip_path: Path) -> Dict[str, Dict]:
                     "trip_id": trip_id,
                     "route_id": route_id,
                     "trip_headsign": trip_headsign,
-                    "direction_id": direction_id
+                    "direction_id": direction_id,
                 }
                 total_trips += 1
 
@@ -483,7 +524,9 @@ def parse_stop_times(zip_path: Path) -> Dict[str, set]:
     return stop_trips
 
 
-def build_routes_index(stops_data: Dict, routes: Dict, trips: Dict, stop_trips: Dict) -> Dict:
+def build_routes_index(
+    stops_data: Dict, routes: Dict, trips: Dict, stop_trips: Dict
+) -> Dict:
     """Build routes index mapping stations to their routes and headsigns.
 
     Args:
@@ -543,10 +586,9 @@ def build_routes_index(stops_data: Dict, routes: Dict, trips: Dict, stop_trips: 
                 direction_id = trip_data["direction_id"]
 
                 # Add trip to route group
-                routes_by_id[route_id].append({
-                    "trip_headsign": trip_headsign,
-                    "direction_id": direction_id
-                })
+                routes_by_id[route_id].append(
+                    {"trip_headsign": trip_headsign, "direction_id": direction_id}
+                )
 
             if not routes_by_id:
                 continue
@@ -565,17 +607,19 @@ def build_routes_index(stops_data: Dict, routes: Dict, trips: Dict, stop_trips: 
                     if key not in unique_trips:
                         unique_trips[key] = trip
 
-                station_routes.append({
-                    "route_id": route_id,
-                    "route_short_name": route_data["route_short_name"],
-                    "route_long_name": route_data["route_long_name"],
-                    "trips": list(unique_trips.values())
-                })
+                station_routes.append(
+                    {
+                        "route_id": route_id,
+                        "route_short_name": route_data["route_short_name"],
+                        "route_long_name": route_data["route_long_name"],
+                        "trips": list(unique_trips.values()),
+                    }
+                )
 
             # Add station to routes index
             routes_index["stations"][station_id] = {
                 "name": station_name,
-                "routes": station_routes
+                "routes": station_routes,
             }
             total_stations_with_routes += 1
 
@@ -632,7 +676,9 @@ def save_routes_index(routes_index: Dict, output_path: Path):
     original_size_kb = len(json_content) / 1024
     compressed_size_kb = len(compressed) / 1024
     ratio = (1 - compressed_size_kb / original_size_kb) * 100
-    print(f"[OK] Saved {compressed_size_kb:.2f} KB (compressed from {original_size_kb:.2f} KB, {ratio:.1f}% reduction)")
+    print(
+        f"[OK] Saved {compressed_size_kb:.2f} KB (compressed from {original_size_kb:.2f} KB, {ratio:.1f}% reduction)"
+    )
 
 
 def print_statistics(cities_index: Dict, routes_index: Dict = None):
@@ -662,8 +708,13 @@ def print_statistics(cities_index: Dict, routes_index: Dict = None):
         print(f"  {i:2d}. {city_name:20s} - {station_count:,} stations")
 
     if routes_index:
-        total_routes = sum(len(station["routes"]) for station in routes_index.get("stations", {}).values())
-        print(f"\nTotal Stations with Routes: {len(routes_index.get('stations', {})):,}")
+        total_routes = sum(
+            len(station["routes"])
+            for station in routes_index.get("stations", {}).values()
+        )
+        print(
+            f"\nTotal Stations with Routes: {len(routes_index.get('stations', {})):,}"
+        )
         print(f"Total Route Associations: {total_routes:,}")
 
     print("=" * 60 + "\n")

@@ -1,4 +1,4 @@
-"""The Silent Bus integration."""
+"""The Israel Transportation integration."""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ SERVICE_UPDATE_LINES_SCHEMA = vol.Schema(
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Silent Bus from a config entry.
+    """Set up Israel Transportation from a config entry.
 
     Args:
         hass: Home Assistant instance
@@ -71,7 +71,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     Raises:
         ConfigEntryNotReady: If setup should be retried
     """
-    _LOGGER.debug("Setting up Silent Bus integration for entry %s", entry.entry_id)
+    _LOGGER.debug(
+        "Setting up Israel Transportation integration for entry %s", entry.entry_id
+    )
 
     # Get common configuration
     transport_type = entry.data.get(CONF_TRANSPORT_TYPE, TRANSPORT_TYPE_BUS)
@@ -175,13 +177,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Log success message
     if transport_type == TRANSPORT_TYPE_TRAIN:
         _LOGGER.info(
-            "Successfully set up Silent Bus integration for train route %s → %s",
+            "Successfully set up Israel Transportation integration for train route %s → %s",
             entry.data.get(CONF_FROM_STATION_NAME, ""),
             entry.data.get(CONF_TO_STATION_NAME, ""),
         )
     else:
         _LOGGER.info(
-            "Successfully set up Silent Bus integration for station %s (%s)",
+            "Successfully set up Israel Transportation integration for station %s (%s)",
             entry.data.get(CONF_STATION_NAME, ""),
             entry.data.get(CONF_STATION_ID, ""),
         )
@@ -199,7 +201,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     Returns:
         True if unload was successful
     """
-    _LOGGER.debug("Unloading Silent Bus integration for entry %s", entry.entry_id)
+    _LOGGER.debug(
+        "Unloading Israel Transportation integration for entry %s", entry.entry_id
+    )
 
     # Unload platforms
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
@@ -212,7 +216,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Note: We're using the shared session from async_get_clientsession,
         # so we don't close it here
 
-        _LOGGER.info("Successfully unloaded Silent Bus integration")
+        _LOGGER.info("Successfully unloaded Israel Transportation integration")
 
     return unload_ok
 
@@ -224,7 +228,9 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         hass: Home Assistant instance
         entry: Config entry
     """
-    _LOGGER.debug("Reloading Silent Bus integration for entry %s", entry.entry_id)
+    _LOGGER.debug(
+        "Reloading Israel Transportation integration for entry %s", entry.entry_id
+    )
     await hass.config_entries.async_reload(entry.entry_id)
 
 
