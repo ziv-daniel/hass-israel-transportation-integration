@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-02-08
+
+### Changed
+- Repository consolidation: single repo for all development and distribution
+- Reset version to 1.0.0 for clean public release
+- Removed release-to-public sync workflow (no longer needed)
+
+### Fixed
+- Fixed hassfest CI validation failure (removed inline URLs from translation strings)
+- Added HACS validation workflow
+
+### Added
+- Full test suite included in repository
+- Development configuration files (pytest.ini, requirements_test.txt)
+- HACS validation workflow for automated HACS compatibility checks
+
+
 ## [0.0.18] - 2026-02-04
 
 ### Changed

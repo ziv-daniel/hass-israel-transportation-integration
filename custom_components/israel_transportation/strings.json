@@ -43,7 +43,7 @@
           "station_id": "Station Number"
         },
         "data_description": {
-          "station_id": "You can find station numbers at https://www.bus.co.il (e.g., 24068 for Arlozorov Terminal)"
+          "station_id": "You can find station numbers at bus.co.il (e.g., 24068 for Arlozorov Terminal)"
         }
       },
       "train_config": {
