@@ -395,6 +395,11 @@ async def test_train_station_valid_routes(hass: HomeAssistant):
 
         mock_client.return_value.search_station = mock_search
 
+        # Mock train route API validation (called after search_station succeeds)
+        mock_client.return_value.validate_train_route_api_response = AsyncMock(
+            return_value=(True, "")
+        )
+
         # Navigate to train config
         result = await navigate_to_train_config(hass)
 
@@ -476,6 +481,11 @@ async def test_train_arrival_data_format(hass: HomeAssistant):
             return AsyncMock(return_value=stations.get(station_id, []))()
 
         mock_client.return_value.search_station = mock_search
+
+        # Mock train route API validation (called after search_station succeeds)
+        mock_client.return_value.validate_train_route_api_response = AsyncMock(
+            return_value=(True, "")
+        )
 
         # Navigate to train config
         result = await navigate_to_train_config(hass)

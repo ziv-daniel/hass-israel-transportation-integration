@@ -258,7 +258,12 @@ async def test_stop_id_formatting():
 
 @pytest.mark.asyncio
 async def test_get_stop_times_list_response():
-    """Test stop times raises error when API returns a list instead of dict."""
+    """Test stop times handles list response via pattern normalization.
+
+    The API sometimes returns a list of pattern objects instead of a dict
+    with a 'times' key. The implementation normalizes this gracefully
+    using _normalize_pattern_response rather than raising an error.
+    """
     mock_response = MagicMock()
     mock_response.json = AsyncMock(return_value=[{"routeShortName": "249"}])
     mock_response.raise_for_status = MagicMock()
@@ -270,11 +275,9 @@ async def test_get_stop_times_list_response():
 
     client = BusNearbyApiClient(session=mock_session)
 
-    with pytest.raises(InvalidResponseError) as exc_info:
-        await client.get_stop_times("12664")
-
-    assert "expected dictionary" in str(exc_info.value)
-    assert "list" in str(exc_info.value)
+    # List responses are normalized via _normalize_pattern_response (not rejected)
+    result = await client.get_stop_times("12664")
+    assert isinstance(result, list)
 
 
 @pytest.mark.asyncio
@@ -340,7 +343,12 @@ async def test_validate_station_api_response_success():
 
 @pytest.mark.asyncio
 async def test_validate_station_api_response_invalid_format():
-    """Test validate_station_api_response returns False for invalid format."""
+    """Test validate_station_api_response returns True for list response.
+
+    The API now gracefully handles list responses via pattern normalization
+    (_normalize_pattern_response), so an empty list is treated as valid
+    (just no arrivals), not as an invalid format.
+    """
     mock_response = MagicMock()
     mock_response.json = AsyncMock(return_value=[])  # List instead of dict
     mock_response.raise_for_status = MagicMock()
@@ -353,8 +361,8 @@ async def test_validate_station_api_response_invalid_format():
     client = BusNearbyApiClient(session=mock_session)
     is_valid, error_msg = await client.validate_station_api_response("12664")
 
-    assert is_valid is False
-    assert "expected dictionary" in error_msg
+    assert is_valid is True
+    assert error_msg == ""
 
 
 @pytest.mark.asyncio
