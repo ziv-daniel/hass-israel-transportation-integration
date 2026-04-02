@@ -58,9 +58,6 @@
         "description": "Choose the station you are traveling to",
         "data": {
           "to_station": "To Station"
-        },
-        "error": {
-          "cannot_be_same": "Origin and destination stations must be different."
         }
       },
       "train_config": {
@@ -91,6 +88,7 @@
       "station_not_found": "Station not found. Please check the station number and try again.",
       "invalid_station_response": "Station exists but returns invalid data format. This station may not be supported.",
       "no_lines": "Please enter at least one bus line number.",
+      "cannot_be_same": "Origin and destination stations must be different.",
       "unknown": "An unexpected error occurred. Please try again."
     },
     "abort": {

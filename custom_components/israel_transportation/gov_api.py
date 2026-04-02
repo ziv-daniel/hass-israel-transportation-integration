@@ -84,9 +84,7 @@ class GovApiClient:
                 timeout=timeout,
             ) as response:
                 if response.status == 429:
-                    retry_after = float(
-                        response.headers.get("Retry-After", 60)
-                    )
+                    retry_after = float(response.headers.get("Retry-After", 60))
                     raise RateLimitError(retry_after=retry_after)
                 response.raise_for_status()
                 return await response.json()
