@@ -13,7 +13,7 @@ from homeassistant.util import dt as dt_util
 from israelrailapi.api import GetRoutesApi
 
 from .api import BusNearbyApiClient, BusNearbyApiError
-from .gov_api import GovApiClient
+from .gov_api import GovApiClient, RateLimitError
 from .gtfs_loader import get_route_headsign
 from .const import (
     APPROACHING_THRESHOLD,
@@ -204,6 +204,11 @@ class SilentBusCoordinator(DataUpdateCoordinator):
 
             return processed_data
 
+        except RateLimitError as err:
+            raise UpdateFailed(
+                f"Rate limited by gov API. Retrying in {err.retry_after}s.",
+                retry_after=err.retry_after,
+            ) from err
         except BusNearbyApiError as err:
             raise UpdateFailed(f"Error fetching data from API: {err}") from err
         except Exception as err:

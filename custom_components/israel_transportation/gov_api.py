@@ -29,6 +29,15 @@ class ApiTimeoutError(GovApiError):
     """Exception raised when API request times out."""
 
 
+class RateLimitError(GovApiError):
+    """Exception raised when API returns HTTP 429 Too Many Requests."""
+
+    def __init__(self, retry_after: float = 60.0) -> None:
+        """Initialize with retry_after seconds."""
+        super().__init__(f"Rate limited. Retry after {retry_after}s.")
+        self.retry_after = retry_after
+
+
 class GovApiClient:
     """API client for bus.gov.il service."""
 
@@ -74,9 +83,16 @@ class GovApiClient:
                 headers=self._headers,
                 timeout=timeout,
             ) as response:
+                if response.status == 429:
+                    retry_after = float(
+                        response.headers.get("Retry-After", 60)
+                    )
+                    raise RateLimitError(retry_after=retry_after)
                 response.raise_for_status()
                 return await response.json()
 
+        except RateLimitError:
+            raise
         except aiohttp.ClientError as err:
             raise ApiConnectionError(f"Failed to connect to API: {err}") from err
         except Exception as err:
