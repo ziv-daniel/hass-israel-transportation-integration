@@ -151,7 +151,9 @@ class SilentBusSensor(CoordinatorEntity, SensorEntity):
             "model": f"{transport_label} Stop",
         }
 
-        # Set entity name
+        # Use translation key for entity name; fallback display name via translation placeholders
+        self._attr_translation_key = "bus_line"
+        self._attr_translation_placeholders = {"line_number": line_number}
         self._attr_name = f"Line {line_number}"
 
     @property
@@ -268,7 +270,8 @@ class SilentBusTrainSensor(CoordinatorEntity, SensorEntity):
             "model": "Train Route",
         }
 
-        # Set entity name
+        # Use translation key for entity name
+        self._attr_translation_key = "next_train"
         self._attr_name = "Next Train"
 
     @property

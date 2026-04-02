@@ -97,6 +97,16 @@
       "already_configured": "תחנה זו כבר מוגדרת."
     }
   },
+  "entity": {
+    "sensor": {
+      "bus_line": {
+        "name": "קו {line_number}"
+      },
+      "next_train": {
+        "name": "רכבת הבאה"
+      }
+    }
+  },
   "options": {
     "step": {
       "init": {

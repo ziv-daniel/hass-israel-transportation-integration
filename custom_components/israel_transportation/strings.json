@@ -97,6 +97,16 @@
       "already_configured": "This station is already configured."
     }
   },
+  "entity": {
+    "sensor": {
+      "bus_line": {
+        "name": "Line {line_number}"
+      },
+      "next_train": {
+        "name": "Next Train"
+      }
+    }
+  },
   "options": {
     "step": {
       "init": {
