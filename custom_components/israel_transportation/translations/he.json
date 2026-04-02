@@ -46,6 +46,23 @@
           "station_id": "ניתן למצוא מספרי תחנות באתר bus.co.il (לדוגמה: 24068 עבור תחנה מרכזית ארלוזורוב)"
         }
       },
+      "train_select_from": {
+        "title": "בחירת תחנת מוצא",
+        "description": "בחר את התחנה ממנה אתה יוצא",
+        "data": {
+          "from_station": "מתחנה"
+        }
+      },
+      "train_select_to": {
+        "title": "בחירת תחנת יעד",
+        "description": "בחר את התחנה אליה אתה נוסע",
+        "data": {
+          "to_station": "לתחנה"
+        },
+        "error": {
+          "cannot_be_same": "תחנת המוצא והיעד חייבות להיות שונות."
+        }
+      },
       "train_config": {
         "title": "הגדרת מסלול רכבת",
         "description": "הגדר את מסלול הרכבת שלך",

@@ -46,6 +46,23 @@
           "station_id": "You can find station numbers at bus.co.il (e.g., 24068 for Arlozorov Terminal)"
         }
       },
+      "train_select_from": {
+        "title": "Select Origin Train Station",
+        "description": "Choose the station you are departing from",
+        "data": {
+          "from_station": "From Station"
+        }
+      },
+      "train_select_to": {
+        "title": "Select Destination Train Station",
+        "description": "Choose the station you are traveling to",
+        "data": {
+          "to_station": "To Station"
+        },
+        "error": {
+          "cannot_be_same": "Origin and destination stations must be different."
+        }
+      },
       "train_config": {
         "title": "Train Route Setup",
         "description": "Configure your train route",
