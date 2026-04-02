@@ -29,6 +29,10 @@ class ApiTimeoutError(GovApiError):
     """Exception raised when API request times out."""
 
 
+class InvalidMakatError(GovApiError):
+    """Exception raised when makat is not a valid numeric station code."""
+
+
 class RateLimitError(GovApiError):
     """Exception raised when API returns HTTP 429 Too Many Requests."""
 
@@ -36,6 +40,25 @@ class RateLimitError(GovApiError):
         """Initialize with retry_after seconds."""
         super().__init__(f"Rate limited. Retry after {retry_after}s.")
         self.retry_after = retry_after
+
+
+def validate_makat(makat: str) -> str:
+    """Validate that makat is a non-empty numeric string.
+
+    Args:
+        makat: Station makat (stop code) to validate.
+
+    Returns:
+        The validated makat string.
+
+    Raises:
+        InvalidMakatError: If makat is not a valid numeric string.
+    """
+    if not makat or not str(makat).strip().isdigit():
+        raise InvalidMakatError(
+            f"Invalid makat {makat!r}: must be a non-empty numeric string."
+        )
+    return str(makat).strip()
 
 
 class GovApiClient:
@@ -98,6 +121,7 @@ class GovApiClient:
 
     async def get_station(self, makat: str, locale: str = "he") -> dict[str, Any]:
         """Get station information by Makat."""
+        makat = validate_makat(makat)
         url = f"{GOV_API_BASE_URL}/GetBusStopByMakat/{makat}/{locale}/false"
         _LOGGER.debug("Getting station info for Makat %s", makat)
 
@@ -144,6 +168,7 @@ class GovApiClient:
                 - CompanyName: Bus company name
                 - BusstopHebrewName: Station name in Hebrew
         """
+        makat = validate_makat(makat)
         url = (
             f"{GOV_API_BASE_URL}/GetRealtimeBusLineListByBustop/{makat}/{locale}/false"
         )

@@ -18,7 +18,7 @@ from .api import (
     BusNearbyApiClient,
     InvalidResponseError,
 )
-from .gov_api import GovApiClient, ApiConnectionError as GovApiConnectionError
+from .gov_api import GovApiClient, ApiConnectionError as GovApiConnectionError, InvalidMakatError
 from homeassistant.helpers.selector import (
     TextSelector,
     TextSelectorConfig,
@@ -632,16 +632,20 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         # Move to next step
                         return await self.async_step_bus_lines()
 
+            except InvalidMakatError:
+                errors["base"] = ERROR_STATION_NOT_FOUND
             except GovApiConnectionError:
                 errors["base"] = ERROR_CANNOT_CONNECT
             except Exception:  # pylint: disable=broad-except
                 _LOGGER.exception("Unexpected exception during station validation")
                 errors["base"] = ERROR_UNKNOWN
 
-        # Show form
+        # Show form — makat must be digits only (mirrors gov_api.validate_makat)
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_STATION_ID): str,
+                vol.Required(CONF_STATION_ID): vol.Match(
+                    r"^\d+$", msg="Station number must contain digits only"
+                ),
             }
         )
 

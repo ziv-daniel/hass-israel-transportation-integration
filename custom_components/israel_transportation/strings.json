@@ -86,6 +86,7 @@
     "error": {
       "cannot_connect": "Failed to connect to the bus API. Please check your internet connection and try again.",
       "station_not_found": "Station not found. Please check the station number and try again.",
+      "invalid_station_id": "Station number must contain digits only (e.g. 24068).",
       "invalid_station_response": "Station exists but returns invalid data format. This station may not be supported.",
       "no_lines": "Please enter at least one bus line number.",
       "cannot_be_same": "Origin and destination stations must be different.",
