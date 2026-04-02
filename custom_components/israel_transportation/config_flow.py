@@ -437,55 +437,43 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 station_id = selected_station["id"]
                 self._station_name = selected_station["name"]
 
-                # Validate and resolve actual stop_id via API
-                # GTFS data may use stop_code (shown on signs) instead of stop_id
+                # Validate the GTFS station ID (stop_code/makat) directly via gov API.
+                # The gov API uses makat (stop_code) — same value that GTFS stores —
+                # so no translation is needed. Using BusNearby to translate to stop_id
+                # was the source of the mismatch bug (the coordinator uses gov API at runtime).
                 try:
-                    async with aiohttp.ClientSession() as session:
-                        api_client = BusNearbyApiClient(session)
+                    async with GovApiClient(
+                        async_get_clientsession(self.hass)
+                    ) as gov_client:
+                        station_info = await gov_client.get_station(station_id)
 
-                        # Try to find the station via API to get correct stop_id
-                        try:
-                            api_stations = await api_client.search_station(station_id)
-                            if api_stations:
-                                # Use stop_id from API result
-                                actual_stop_id = api_stations[0].get(
-                                    "stop_id", api_stations[0].get("id", station_id)
-                                )
-                                _LOGGER.debug(
-                                    "GTFS station lookup: gtfs_id=%s -> stop_id=%s",
-                                    station_id,
-                                    actual_stop_id,
-                                )
-                            else:
-                                # Fallback to GTFS ID if API search fails
-                                actual_stop_id = station_id
-                        except Exception:
-                            actual_stop_id = station_id
-
-                        self._station_id = actual_stop_id
-
-                        # Validate API response format
-                        (
-                            is_valid,
-                            error_msg,
-                        ) = await api_client.validate_station_api_response(
-                            actual_stop_id
-                        )
-                        if not is_valid:
+                        if (
+                            station_info.get("Name") is None
+                            or station_info.get("Makat", 0) == 0
+                        ):
                             _LOGGER.error(
-                                "Station %s (gtfs: %s) failed API validation: %s",
-                                actual_stop_id,
+                                "GTFS station %s failed gov API validation: %s",
                                 station_id,
-                                error_msg,
+                                station_info,
                             )
-                            errors["base"] = ERROR_INVALID_STATION_RESPONSE
+                            errors["base"] = ERROR_STATION_NOT_FOUND
                         else:
-                            # Move to bus lines selection
+                            # Store the makat (stop_code) — this is what gov API expects at runtime
+                            self._station_id = station_id
+                            self._station_name = station_info.get(
+                                "Name", self._station_name
+                            )
+                            _LOGGER.debug(
+                                "GTFS station validated via gov API: makat=%s, name=%s",
+                                station_id,
+                                self._station_name,
+                            )
                             return await self.async_step_bus_lines()
-                except ApiConnectionError:
+
+                except GovApiConnectionError:
                     errors["base"] = ERROR_CANNOT_CONNECT
                 except Exception:  # pylint: disable=broad-except
-                    _LOGGER.exception("Unexpected exception during API validation")
+                    _LOGGER.exception("Unexpected exception during gov API validation")
                     errors["base"] = ERROR_UNKNOWN
             else:
                 errors["base"] = ERROR_STATION_NOT_FOUND
