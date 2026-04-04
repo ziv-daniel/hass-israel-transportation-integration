@@ -312,9 +312,9 @@ async def test_gov_api_malformed_minutes_type(
         assert line_data is None or line_data == []
     except Exception as exc:
         # UpdateFailed is acceptable; async_config_entry_first_refresh wraps it as ConfigEntryNotReady
-        assert isinstance(
-            exc, (UpdateFailed, ConfigEntryNotReady)
-        ), f"Expected UpdateFailed or ConfigEntryNotReady, got {type(exc).__name__}: {exc}"
+        assert isinstance(exc, (UpdateFailed, ConfigEntryNotReady)), (
+            f"Expected UpdateFailed or ConfigEntryNotReady, got {type(exc).__name__}: {exc}"
+        )
 
 
 @pytest.mark.asyncio
