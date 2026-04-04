@@ -54,7 +54,8 @@ def validate_makat(makat: str) -> str:
     Raises:
         InvalidMakatError: If makat is not a valid numeric string.
     """
-    if not makat or not str(makat).strip().isdigit():
+    makat = str(makat).strip()
+    if not makat or not makat.isascii() or not makat.isdigit():
         raise InvalidMakatError(
             f"Invalid makat {makat!r}: must be a non-empty numeric string."
         )

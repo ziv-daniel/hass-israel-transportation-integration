@@ -607,8 +607,8 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             station_id = user_input[CONF_STATION_ID].strip()
 
-            # Manual digit-only validation (vol.Match is not serializable by HA)
-            if not station_id or not station_id.isdigit():
+            # ASCII digits only — isdigit() alone also accepts Arabic-Indic/Unicode digits
+            if not station_id or not station_id.isascii() or not station_id.isdigit():
                 errors[CONF_STATION_ID] = "invalid_station_id"
             else:
                 # Validate station directly with gov API (no translation needed)
