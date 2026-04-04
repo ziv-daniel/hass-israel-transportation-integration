@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -407,7 +407,6 @@ async def test_coordinator_retains_stale_data_after_failed_update(
 ):
     """After a successful refresh, a failed update retains last-good data."""
     mock_gov_client = MagicMock()
-    current_time = int(datetime.now().timestamp())
 
     mock_gov_client.get_arrivals = AsyncMock(
         return_value=[
@@ -438,9 +437,7 @@ async def test_coordinator_retains_stale_data_after_failed_update(
     assert "249" in coordinator.data
 
     # Now fail the update
-    mock_gov_client.get_arrivals = AsyncMock(
-        side_effect=Exception("Network error")
-    )
+    mock_gov_client.get_arrivals = AsyncMock(side_effect=Exception("Network error"))
     await coordinator.async_refresh()
 
     # last_update_success is False but data is retained from last good fetch
