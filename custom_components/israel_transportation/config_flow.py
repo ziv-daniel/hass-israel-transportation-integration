@@ -603,48 +603,47 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             station_id = user_input[CONF_STATION_ID].strip()
 
-            # Validate station directly with gov API (no translation needed)
-            try:
-                async with GovApiClient(
-                    async_get_clientsession(self.hass)
-                ) as gov_client:
-                    # Validate station directly with gov API
-                    station_info = await gov_client.get_station(station_id)
+            # Manual digit-only validation (vol.Match is not serializable by HA)
+            if not station_id or not station_id.isdigit():
+                errors[CONF_STATION_ID] = "invalid_station_id"
+            else:
+                # Validate station directly with gov API (no translation needed)
+                try:
+                    async with GovApiClient(
+                        async_get_clientsession(self.hass)
+                    ) as gov_client:
+                        station_info = await gov_client.get_station(station_id)
 
-                    if (
-                        station_info.get("Name") is None
-                        or station_info.get("Makat", 0) == 0
-                    ):
-                        errors["base"] = ERROR_STATION_NOT_FOUND
-                    else:
-                        # Station is valid - use Makat directly
-                        self._station_id = station_id
-                        self._station_name = station_info.get(
-                            "Name", f"Station {station_id}"
-                        )
+                        if (
+                            station_info.get("Name") is None
+                            or station_info.get("Makat", 0) == 0
+                        ):
+                            errors["base"] = ERROR_STATION_NOT_FOUND
+                        else:
+                            self._station_id = station_id
+                            self._station_name = station_info.get(
+                                "Name", f"Station {station_id}"
+                            )
+                            _LOGGER.info(
+                                "Station validated: makat=%s, name=%s",
+                                self._station_id,
+                                self._station_name,
+                            )
+                            return await self.async_step_bus_lines()
 
-                        _LOGGER.info(
-                            "Station validated: makat=%s, name=%s",
-                            self._station_id,
-                            self._station_name,
-                        )
+                except InvalidMakatError:
+                    errors["base"] = ERROR_STATION_NOT_FOUND
+                except GovApiConnectionError:
+                    errors["base"] = ERROR_CANNOT_CONNECT
+                except Exception:  # pylint: disable=broad-except
+                    _LOGGER.exception("Unexpected exception during station validation")
+                    errors["base"] = ERROR_UNKNOWN
 
-                        # Move to next step
-                        return await self.async_step_bus_lines()
-
-            except InvalidMakatError:
-                errors["base"] = ERROR_STATION_NOT_FOUND
-            except GovApiConnectionError:
-                errors["base"] = ERROR_CANNOT_CONNECT
-            except Exception:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected exception during station validation")
-                errors["base"] = ERROR_UNKNOWN
-
-        # Show form — makat must be digits only (mirrors gov_api.validate_makat)
+        # Use TextSelector — vol.Match is not serializable by voluptuous_serialize
         data_schema = vol.Schema(
             {
-                vol.Required(CONF_STATION_ID): vol.Match(
-                    r"^\d+$", msg="Station number must contain digits only"
+                vol.Required(CONF_STATION_ID): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.TEXT)
                 ),
             }
         )
@@ -789,13 +788,9 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         },
                     )
 
-        # Get train stations list (exclude the FROM station)
+        # Get train stations list (include all stations — cannot_be_same error handles duplicates)
         stations_list = get_train_stations_list()
-        station_options = {
-            s["id"]: s["name"]
-            for s in stations_list
-            if s["id"] != self._from_station  # Exclude FROM station
-        }
+        station_options = {s["id"]: s["name"] for s in stations_list}
 
         # Add manual entry option
         station_options["manual"] = "🔍 Enter station ID manually..."
