@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.israel_transportation.api import BusNearbyApiError
@@ -310,8 +311,10 @@ async def test_gov_api_malformed_minutes_type(
         line_data = coordinator.get_line_data("249")
         assert line_data is None or line_data == []
     except Exception as exc:
-        # Only UpdateFailed is acceptable — raw TypeError/KeyError is not
-        assert isinstance(exc, UpdateFailed), f"Expected UpdateFailed, got {type(exc).__name__}: {exc}"
+        # UpdateFailed is acceptable; async_config_entry_first_refresh wraps it as ConfigEntryNotReady
+        assert isinstance(exc, (UpdateFailed, ConfigEntryNotReady)), (
+            f"Expected UpdateFailed or ConfigEntryNotReady, got {type(exc).__name__}: {exc}"
+        )
 
 
 @pytest.mark.asyncio
