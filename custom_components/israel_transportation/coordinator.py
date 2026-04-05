@@ -104,13 +104,27 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         else:
             coordinator_name = f"{DOMAIN}_{station_id}"
 
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=coordinator_name,
-            update_interval=update_interval,
-            config_entry=config_entry,
-        )
+        # Build kwargs for super().__init__ - config_entry is only supported
+        # in HA 2023.7+ (DataUpdateCoordinator gained the parameter later)
+        init_kwargs: dict[str, Any] = {
+            "name": coordinator_name,
+            "update_interval": update_interval,
+        }
+        try:
+            super().__init__(
+                hass,
+                _LOGGER,
+                config_entry=config_entry,
+                **init_kwargs,
+            )
+        except TypeError:
+            # Older HA version without config_entry support
+            super().__init__(
+                hass,
+                _LOGGER,
+                **init_kwargs,
+            )
+            self.config_entry = config_entry
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data from API.

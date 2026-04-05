@@ -43,7 +43,7 @@ async def test_coordinator_update_success(
         bus_lines=["249"],
     )
 
-    await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_refresh()
 
     assert coordinator.data is not None
     assert "249" in coordinator.data
@@ -113,7 +113,7 @@ async def test_coordinator_process_arrivals(
         bus_lines=["249"],
     )
 
-    await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_refresh()
 
     # Check that arrivals are sorted by time
     line_data = coordinator.get_line_data("249")
@@ -152,7 +152,7 @@ async def test_coordinator_get_next_arrival(
         bus_lines=["249"],
     )
 
-    await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_refresh()
 
     next_arrival = coordinator.get_next_arrival("249")
     assert next_arrival is not None
@@ -191,7 +191,7 @@ async def test_coordinator_update_interval_adjustment(
         bus_lines=["249"],
     )
 
-    await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_refresh()
 
     # Update interval might change based on approaching bus
     # (exact behavior depends on implementation)
@@ -235,7 +235,7 @@ async def test_coordinator_multiple_lines(
         bus_lines=["249", "40"],
     )
 
-    await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_refresh()
 
     assert "249" in coordinator.data
     assert "40" in coordinator.data
@@ -261,7 +261,7 @@ async def test_coordinator_no_data_for_line(
         bus_lines=["249"],
     )
 
-    await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_refresh()
 
     line_data = coordinator.get_line_data("249")
     assert line_data is None

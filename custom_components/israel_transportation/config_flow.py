@@ -1003,11 +1003,20 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         Returns:
             Options flow handler
         """
-        return SilentBusOptionsFlow()
+        return SilentBusOptionsFlow(config_entry)
 
 
 class SilentBusOptionsFlow(config_entries.OptionsFlow):
     """Handle options flow for Israel Transportation."""
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize options flow."""
+        self._config_entry = config_entry
+
+    @property
+    def config_entry(self) -> config_entries.ConfigEntry:
+        """Return the config entry."""
+        return self._config_entry
 
     async def async_step_init(
         self, user_input: Optional[dict[str, Any]] = None

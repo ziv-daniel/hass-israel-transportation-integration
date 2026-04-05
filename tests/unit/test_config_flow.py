@@ -283,12 +283,24 @@ async def test_options_flow(hass: HomeAssistant):
     """Test options flow."""
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+    from custom_components.israel_transportation.const import (
+        CONF_MAX_ARRIVALS,
+        CONF_UPDATE_INTERVAL,
+        DEFAULT_MAX_ARRIVALS,
+        DEFAULT_SCAN_INTERVAL,
+    )
+
+    # Import config_flow to register handler in HANDLERS registry
+    import custom_components.israel_transportation.config_flow  # noqa: F401
+
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
             CONF_STATION_ID: "24068",
             CONF_STATION_NAME: "Test Station",
             CONF_BUS_LINES: ["249", "40"],
+            CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
+            CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
         },
     )
 
@@ -305,31 +317,42 @@ async def test_options_flow_update(hass: HomeAssistant):
     """Test options flow with updates."""
     from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+    from custom_components.israel_transportation.const import (
+        CONF_MAX_ARRIVALS,
+        CONF_UPDATE_INTERVAL,
+        DEFAULT_MAX_ARRIVALS,
+        DEFAULT_SCAN_INTERVAL,
+    )
+
+    # Import config_flow to register handler in HANDLERS registry
+    import custom_components.israel_transportation.config_flow  # noqa: F401
+
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
             CONF_STATION_ID: "24068",
             CONF_STATION_NAME: "Test Station",
             CONF_BUS_LINES: ["249", "40"],
+            CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
+            CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
         },
     )
 
     entry.add_to_hass(hass)
 
-    with patch.object(hass.config_entries, "async_update_entry"):
-        result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
 
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"],
-            {
-                CONF_BUS_LINES: "249, 40, 605",
-                "update_interval": 60,
-                "max_arrivals": 5,
-            },
-        )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            CONF_BUS_LINES: "249, 40, 605",
+            CONF_UPDATE_INTERVAL: 60,
+            CONF_MAX_ARRIVALS: 5,
+        },
+    )
 
-        # Options flow completes successfully
-        assert result["type"] == FlowResultType.CREATE_ENTRY
+    # Options flow completes successfully
+    assert result["type"] == FlowResultType.CREATE_ENTRY
 
 
 @pytest.mark.asyncio
