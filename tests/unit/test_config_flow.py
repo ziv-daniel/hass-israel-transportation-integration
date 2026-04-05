@@ -416,3 +416,152 @@ async def test_station_makat_used_directly(hass: HomeAssistant):
         # With gov API, the makat is stored directly as entered
         assert result["data"][CONF_STATION_ID] == "12665"
         assert result["data"][CONF_BUS_LINES] == ["1", "5", "1א"]
+
+
+# ---------------------------------------------------------------------------
+# Fuzz / security / edge-case tests for station_config input
+# ---------------------------------------------------------------------------
+
+INVALID_MAKAT_INPUTS = [
+    "",  # empty string
+    "   ",  # whitespace only
+    "abc",  # alpha chars
+    "abc123",  # alphanumeric
+    "12.34",  # decimal
+    "-1",  # negative
+    "1 2 3",  # spaces inside digits
+    "' OR '1'='1",  # SQL injection
+    "<script>alert(1)</script>",  # XSS payload
+    "../../etc/passwd",  # path traversal
+    "A" * 500,  # very long non-numeric string
+    "\x00\x01\x02",  # null/control bytes
+    "١٢٣٤٥",  # Arabic-Indic digits (not ASCII digits)
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("bad_input", INVALID_MAKAT_INPUTS)
+async def test_station_config_rejects_invalid_makat(
+    hass: HomeAssistant, bad_input: str
+):
+    """Non-numeric station IDs must be rejected with invalid_station_id — never crash."""
+    from custom_components.israel_transportation.const import (
+        CONF_TRANSPORT_TYPE,
+        TRANSPORT_TYPE_BUS,
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"selection_method": "manual"}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_STATION_ID: bad_input}
+    )
+
+    # Must re-show form (never create_entry or abort)
+    assert result["type"] == FlowResultType.FORM, (
+        f"Input {bad_input!r} should have shown form, got {result['type']}"
+    )
+    # Error must be on the station_id field (not a crash / generic unknown)
+    errors = result.get("errors", {})
+    assert errors.get(CONF_STATION_ID) == "invalid_station_id", (
+        f"Input {bad_input!r}: expected errors[station_id]=invalid_station_id, got {errors}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_station_config_whitespace_stripped(hass: HomeAssistant):
+    """Station ID with surrounding whitespace is stripped and validated."""
+    from unittest.mock import AsyncMock, patch
+
+    from custom_components.israel_transportation.const import (
+        CONF_TRANSPORT_TYPE,
+        TRANSPORT_TYPE_BUS,
+    )
+
+    with patch(
+        "custom_components.israel_transportation.config_flow.GovApiClient"
+    ) as mock_client:
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
+        mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
+        mock_client.return_value.get_station = AsyncMock(
+            return_value={"Name": "Test Station", "Makat": 24068}
+        )
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"selection_method": "manual"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_STATION_ID: "  24068  "}
+        )
+
+    # Should advance to bus_lines form, not error
+    assert result["type"] == FlowResultType.FORM
+    assert result["step_id"] == "bus_lines"
+
+
+@pytest.mark.asyncio
+async def test_duplicate_entry_aborted(hass: HomeAssistant):
+    """Attempting to add the same station twice must abort with already_configured."""
+    from unittest.mock import AsyncMock, patch
+
+    from homeassistant.data_entry_flow import FlowResultType as FRT
+
+    from custom_components.israel_transportation.const import (
+        CONF_TRANSPORT_TYPE,
+        TRANSPORT_TYPE_BUS,
+    )
+
+    async def _complete_bus_flow(flow_id: str) -> dict:
+        result = await hass.config_entries.flow.async_configure(
+            flow_id, {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"selection_method": "manual"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_STATION_ID: "24068"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_BUS_LINES: "249"}
+        )
+        return result
+
+    with patch(
+        "custom_components.israel_transportation.config_flow.GovApiClient"
+    ) as mock_client:
+        mock_client.return_value.__aenter__ = AsyncMock(
+            return_value=mock_client.return_value
+        )
+        mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
+        mock_client.return_value.get_station = AsyncMock(
+            return_value={"Name": "Test Station", "Makat": 24068}
+        )
+
+        # First entry — must succeed
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await _complete_bus_flow(result["flow_id"])
+        assert result["type"] == FRT.CREATE_ENTRY
+
+        # Second entry with same station — must abort
+        result2 = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result2 = await _complete_bus_flow(result2["flow_id"])
+        assert result2["type"] == FRT.ABORT
+        assert result2["reason"] == "already_configured"
