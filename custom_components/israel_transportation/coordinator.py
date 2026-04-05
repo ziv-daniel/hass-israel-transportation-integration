@@ -367,8 +367,8 @@ class SilentBusCoordinator(DataUpdateCoordinator):
                 if departure_time is None:
                     # Fallback for non-standard formats
                     departure_time = datetime.fromisoformat(dep_time_str)
-                    if departure_time.tzinfo is None:
-                        departure_time = dt_util.as_local(departure_time)
+                if departure_time.tzinfo is None:
+                    departure_time = dt_util.as_local(departure_time)
             except (ValueError, TypeError):
                 continue
 
@@ -397,8 +397,8 @@ class SilentBusCoordinator(DataUpdateCoordinator):
                     if arrival_time is None:
                         # Fallback for non-standard formats
                         arrival_time = datetime.fromisoformat(arr_time_str)
-                        if arrival_time.tzinfo is None:
-                            arrival_time = dt_util.as_local(arrival_time)
+                    if arrival_time.tzinfo is None:
+                        arrival_time = dt_util.as_local(arrival_time)
 
                     duration_minutes = int(
                         (arrival_time - departure_time).total_seconds() / 60
