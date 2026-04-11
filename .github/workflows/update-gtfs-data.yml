@@ -46,12 +46,7 @@ jobs:
           if ! gh release view gtfs-data-latest &>/dev/null; then
             gh release create gtfs-data-latest \
               --title "GTFS Station Data (auto-updated)" \
-              --notes "Latest Israeli public transit station data from the Ministry of Transport.
-
-This release is automatically updated every few days. The tag \`gtfs-data-latest\` always points to the most recent data.
-
-Data source: https://gtfs.mot.gov.il
-License: CDLA-Permissive-1.0" \
+              --notes "Auto-updated GTFS station data from gtfs.mot.gov.il (CDLA-Permissive-1.0). Updated every few days." \
               --prerelease
             echo "Created gtfs-data-latest release"
           else
