@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-04-12
+
+### Fixed
+- Train coordinator: datetime timezone error (`can't subtract offset-naive and offset-aware datetimes`) when processing train departure/arrival times
+- Config flow: HTTP 500 on manual station ID entry caused by non-serializable `vol.Match` validator — replaced with `TextSelector` + manual validation
+- Config flow: train same-station error (`cannot_be_same`) was unreachable because FROM station was excluded from TO dropdown before validation
+- Validation: Unicode/Arabic-Indic digits (e.g. `١٢٣٤٥`) now correctly rejected — added `.isascii()` guard alongside `.isdigit()`
+
+### Changed
+- GTFS station data decoupled from code releases — data now lives as assets on a fixed `gtfs-data-latest` GitHub Release and is downloaded/refreshed automatically by the integration (weekly). Code releases no longer bump version for data-only changes.
+- GTFS loader refreshes data in the background every 7 days with no disruption to running sensors
+
+### Added
+- CI: coverage threshold (70%), mypy type checking, bandit security scan
+- Security tests: fuzz/edge-case tests for station ID input (SQL injection, XSS, path traversal, Arabic-Indic digits, null bytes)
+
 ## [1.0.23] - 2026-04-10
 
 ### Changed
