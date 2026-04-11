@@ -71,7 +71,9 @@ def _mark_gtfs_updated() -> None:
         _LOGGER.warning(f"Could not write GTFS timestamp: {e}")
 
 
-async def _download_asset(session: "aiohttp.ClientSession", filename: str, dest: Path) -> bool:
+async def _download_asset(
+    session: "aiohttp.ClientSession", filename: str, dest: Path
+) -> bool:
     """Download a single asset from the gtfs-data-latest release.
 
     Uses a direct download URL that never changes:
@@ -79,7 +81,9 @@ async def _download_asset(session: "aiohttp.ClientSession", filename: str, dest:
 
     Returns True on success, False on failure.
     """
-    url = f"https://github.com/{GITHUB_REPO}/releases/download/{GTFS_DATA_TAG}/{filename}"
+    url = (
+        f"https://github.com/{GITHUB_REPO}/releases/download/{GTFS_DATA_TAG}/{filename}"
+    )
     _LOGGER.info(f"Downloading GTFS asset: {url}")
     try:
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=120)) as resp:
@@ -128,14 +132,18 @@ async def download_gtfs_data_from_release() -> bool:
         cities_data = json.loads(cities_path.read_bytes())
         city_count = len(cities_data)
         station_count = sum(len(c["stations"]) for c in cities_data.values())
-        _LOGGER.info(f"GTFS download complete: {city_count} cities, {station_count} stations")
+        _LOGGER.info(
+            f"GTFS download complete: {city_count} cities, {station_count} stations"
+        )
     except (json.JSONDecodeError, KeyError) as e:
         _LOGGER.error(f"Downloaded cities_index.json is invalid: {e}")
         cities_path.unlink(missing_ok=True)
         return False
 
     if not routes_ok:
-        _LOGGER.warning("routes_index.json.gz download failed — headsign fallback unavailable")
+        _LOGGER.warning(
+            "routes_index.json.gz download failed — headsign fallback unavailable"
+        )
 
     # Invalidate in-memory caches so next load reads fresh data
     global _CITIES_INDEX_CACHE, _ROUTES_INDEX_CACHE
@@ -301,7 +309,9 @@ async def async_load_cities_index() -> Dict:
 
     if not index_path.exists():
         # First install or HACS didn't bundle the file — download now (blocking)
-        _LOGGER.warning("GTFS data not found locally. Downloading from gtfs-data-latest release...")
+        _LOGGER.warning(
+            "GTFS data not found locally. Downloading from gtfs-data-latest release..."
+        )
         success = await download_gtfs_data_from_release()
         if not success:
             raise FileNotFoundError(
