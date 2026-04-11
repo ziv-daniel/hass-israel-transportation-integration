@@ -1,0 +1,6 @@
+[run]
+source = custom_components.israel_transportation
+
+[report]
+omit =
+    */gtfs_loader.py

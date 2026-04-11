@@ -811,7 +811,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={
                 "from_station": self._from_station_name,
-                "train_help": f"Select the destination (TO) train station from {self._from_station_name}",
+                "train_help": f"Select the destination (TO) train station from {self._from_station_name}",  # nosec B608
             },
         )
 

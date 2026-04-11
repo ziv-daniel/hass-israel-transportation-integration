@@ -221,7 +221,6 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         except RateLimitError as err:
             raise UpdateFailed(
                 f"Rate limited by gov API. Retrying in {err.retry_after}s.",
-                retry_after=err.retry_after,
             ) from err
         except BusNearbyApiError as err:
             raise UpdateFailed(f"Error fetching data from API: {err}") from err
