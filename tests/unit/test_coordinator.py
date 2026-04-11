@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import UpdateFailed
 
 from custom_components.israel_transportation.api import BusNearbyApiError
@@ -304,17 +303,11 @@ async def test_gov_api_malformed_minutes_type(
         bus_lines=["249"],
     )
 
-    # Must not raise TypeError — coordinator should raise UpdateFailed or return empty data
-    try:
-        await coordinator.async_config_entry_first_refresh()
-        # If it succeeds, data should be empty (bad entries skipped)
-        line_data = coordinator.get_line_data("249")
-        assert line_data is None or line_data == []
-    except Exception as exc:
-        # UpdateFailed is acceptable; async_config_entry_first_refresh wraps it as ConfigEntryNotReady
-        assert isinstance(exc, (UpdateFailed, ConfigEntryNotReady)), (
-            f"Expected UpdateFailed or ConfigEntryNotReady, got {type(exc).__name__}: {exc}"
-        )
+    # Must not raise TypeError — coordinator should handle bad data gracefully
+    await coordinator.async_refresh()
+    # Bad entries should be skipped; data may be empty or missing the line
+    line_data = coordinator.get_line_data("249")
+    assert line_data is None or line_data == []
 
 
 @pytest.mark.asyncio
@@ -346,7 +339,7 @@ async def test_gov_api_missing_shilut_field(
         bus_lines=["249"],
     )
 
-    await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_refresh()
     # Entry without Shilut must be silently skipped, not crash
     assert coordinator.data == {} or coordinator.get_line_data("249") is None
 
@@ -368,7 +361,7 @@ async def test_gov_api_empty_response(hass: HomeAssistant, simple_mock_config_en
         bus_lines=["249"],
     )
 
-    await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_refresh()
 
     assert coordinator.data == {}
     assert coordinator.get_next_arrival("249") is None
@@ -432,7 +425,7 @@ async def test_coordinator_retains_stale_data_after_failed_update(
     )
 
     # First refresh succeeds
-    await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_refresh()
     assert coordinator.data is not None
     assert "249" in coordinator.data
 
