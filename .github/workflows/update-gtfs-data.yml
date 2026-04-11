@@ -40,7 +40,6 @@ jobs:
           fi
 
       - name: Ensure gtfs-data-latest release exists
-        if: steps.check_changes.outputs.has_changes == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -69,6 +68,23 @@ License: CDLA-Permissive-1.0" \
             custom_components/israel_transportation/gtfs_data/routes_index.json.gz \
             --clobber
           echo "Assets updated on gtfs-data-latest"
+
+      - name: Bootstrap assets on first run (if release was just created)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Upload current assets if none exist yet on the release
+          ASSETS=$(gh release view gtfs-data-latest --json assets --jq '.assets | length')
+          if [ "$ASSETS" -eq 0 ]; then
+            echo "No assets on release yet — uploading current data as bootstrap"
+            gh release upload gtfs-data-latest \
+              custom_components/israel_transportation/gtfs_data/cities_index.json \
+              custom_components/israel_transportation/gtfs_data/routes_index.json.gz \
+              --clobber
+            echo "Bootstrap complete"
+          else
+            echo "Release already has $ASSETS assets — nothing to bootstrap"
+          fi
 
       - name: Notify on failure
         if: failure()
