@@ -76,6 +76,10 @@ home-assistant_v2.db
 *.png
 !custom_components/**/*.png
 
+# GTFS binary data — lives as GitHub Release asset, not in repo
+custom_components/israel_transportation/gtfs_data/routes_index.json.gz
+custom_components/israel_transportation/gtfs_data/.gtfs_updated_at
+
 # Claude temporary files
 .claude/*.png
 .claude/*.txt

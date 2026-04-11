@@ -37,7 +37,9 @@ if sys.platform == "win32":
     _real_socket_class = socket_module.socket
     _original_socketpair = socket_module.socketpair
 
-    def _unguarded_socketpair(family=socket_module.AF_INET, type=socket_module.SOCK_STREAM, proto=0):
+    def _unguarded_socketpair(
+        family=socket_module.AF_INET, type=socket_module.SOCK_STREAM, proto=0
+    ):
         """Create a socket pair bypassing pytest-socket guard."""
         saved = socket_module.socket
         try:
@@ -131,9 +133,7 @@ def mock_api_client():
 @pytest.fixture
 def mock_gov_api_client():
     """Mock GovApiClient for bus/light rail tests."""
-    with patch(
-        "custom_components.israel_transportation.gov_api.GovApiClient"
-    ) as mock:
+    with patch("custom_components.israel_transportation.gov_api.GovApiClient") as mock:
         client = mock.return_value
         client.validate_station = AsyncMock(return_value=True)
         client.get_station = AsyncMock(

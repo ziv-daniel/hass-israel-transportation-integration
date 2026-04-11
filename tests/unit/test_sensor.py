@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import datetime
 from unittest.mock import MagicMock
 
-import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components.israel_transportation.sensor import (
@@ -286,9 +285,7 @@ class TestSilentBusTrainSensor:
             to_station_name="Tel Aviv Savidor",
         )
 
-        assert (
-            sensor.unique_id == "israel_transportation_train_9600_3700"
-        )
+        assert sensor.unique_id == "israel_transportation_train_9600_3700"
 
     async def test_train_sensor_attributes(self, hass: HomeAssistant):
         """Train sensor attributes include from/to station info."""

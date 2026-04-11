@@ -133,9 +133,7 @@ class TestGovCoordinatorInit:
     ):
         """Constructor stores gov_api_client and leaves api_client as None."""
         mock_gov = MagicMock()
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
 
         assert coordinator.gov_api_client is mock_gov
         assert coordinator.api_client is None
@@ -147,9 +145,7 @@ class TestGovCoordinatorInit:
     ):
         """Coordinator name is based on domain + station_id."""
         mock_gov = MagicMock()
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
         assert coordinator.name == "israel_transportation_24068"
 
 
@@ -166,9 +162,7 @@ class TestProcessGovArrivals:
     ):
         """Standard gov response → correct line grouping and arrival count."""
         mock_gov = MagicMock()
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
 
         result = coordinator._process_gov_arrivals(GOV_ARRIVALS_STANDARD)
 
@@ -177,14 +171,10 @@ class TestProcessGovArrivals:
         assert len(result["249"]) == 3  # MinutesToArrivalList has 3 entries
         assert len(result["40"]) == 2
 
-    async def test_arrival_fields(
-        self, hass: HomeAssistant, simple_mock_config_entry
-    ):
+    async def test_arrival_fields(self, hass: HomeAssistant, simple_mock_config_entry):
         """Each arrival dict has the expected keys and values."""
         mock_gov = MagicMock()
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
 
         result = coordinator._process_gov_arrivals(GOV_ARRIVALS_STANDARD)
 
@@ -215,9 +205,7 @@ class TestProcessGovArrivals:
     ):
         """Entries with empty Shilut are skipped."""
         mock_gov = MagicMock()
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
 
         result = coordinator._process_gov_arrivals(GOV_ARRIVALS_BAD_SHILUT)
 
@@ -269,14 +257,10 @@ class TestProcessGovArrivals:
         assert minutes == sorted(minutes)
         assert minutes[0] == 5
 
-    async def test_empty_response(
-        self, hass: HomeAssistant, simple_mock_config_entry
-    ):
+    async def test_empty_response(self, hass: HomeAssistant, simple_mock_config_entry):
         """Empty API response produces empty dict."""
         mock_gov = MagicMock()
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
 
         result = coordinator._process_gov_arrivals([])
 
@@ -287,9 +271,7 @@ class TestProcessGovArrivals:
     ):
         """Entry with neither MinutesToArrivalList nor MinutesToArrival → empty list for line."""
         mock_gov = MagicMock()
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
 
         arrivals = [{"Shilut": "99", "Description": "Ghost bus"}]
         result = coordinator._process_gov_arrivals(arrivals)
@@ -313,9 +295,7 @@ class TestGovUpdateData:
         mock_gov = MagicMock()
         mock_gov.get_arrivals = AsyncMock(return_value=GOV_ARRIVALS_STANDARD)
 
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
 
         await coordinator.async_refresh()
 
@@ -324,9 +304,7 @@ class TestGovUpdateData:
         assert "40" in coordinator.data
         assert len(coordinator.data["249"]) == 3
 
-        mock_gov.get_arrivals.assert_awaited_once_with(
-            "24068", lines=["249", "40"]
-        )
+        mock_gov.get_arrivals.assert_awaited_once_with("24068", lines=["249", "40"])
 
     async def test_update_empty_response(
         self, hass: HomeAssistant, simple_mock_config_entry
@@ -335,9 +313,7 @@ class TestGovUpdateData:
         mock_gov = MagicMock()
         mock_gov.get_arrivals = AsyncMock(return_value=[])
 
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
 
         await coordinator.async_refresh()
 
@@ -348,13 +324,9 @@ class TestGovUpdateData:
     ):
         """Gov API raising exception → UpdateFailed."""
         mock_gov = MagicMock()
-        mock_gov.get_arrivals = AsyncMock(
-            side_effect=Exception("Connection refused")
-        )
+        mock_gov.get_arrivals = AsyncMock(side_effect=Exception("Connection refused"))
 
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
 
         with pytest.raises(UpdateFailed):
             await coordinator._async_update_data()
@@ -394,9 +366,7 @@ class TestGovDataAccess:
         mock_gov = MagicMock()
         mock_gov.get_arrivals = AsyncMock(return_value=GOV_ARRIVALS_STANDARD)
 
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
         await coordinator.async_refresh()
 
         next_249 = coordinator.get_next_arrival("249")
@@ -405,16 +375,12 @@ class TestGovDataAccess:
         assert next_249["direction"] == "Tel Aviv - Jerusalem"
         assert next_249["operator"] == "Egged"
 
-    async def test_get_line_data(
-        self, hass: HomeAssistant, simple_mock_config_entry
-    ):
+    async def test_get_line_data(self, hass: HomeAssistant, simple_mock_config_entry):
         """get_line_data returns sorted list of all arrivals for a line."""
         mock_gov = MagicMock()
         mock_gov.get_arrivals = AsyncMock(return_value=GOV_ARRIVALS_STANDARD)
 
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
         await coordinator.async_refresh()
 
         line_data = coordinator.get_line_data("249")
@@ -429,9 +395,7 @@ class TestGovDataAccess:
         mock_gov = MagicMock()
         mock_gov.get_arrivals = AsyncMock(return_value=GOV_ARRIVALS_STANDARD)
 
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
         await coordinator.async_refresh()
 
         assert coordinator.get_next_arrival("999") is None
@@ -441,9 +405,7 @@ class TestGovDataAccess:
     ):
         """get_line_data returns None when coordinator has no data."""
         mock_gov = MagicMock()
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
         # Don't refresh - data is None
         assert coordinator.get_line_data("249") is None
 
@@ -473,9 +435,7 @@ class TestGovIntervalAdjustment:
             ]
         )
 
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
         await coordinator.async_refresh()
 
         assert coordinator.update_interval == MIN_SCAN_INTERVAL
@@ -487,9 +447,7 @@ class TestGovIntervalAdjustment:
         mock_gov = MagicMock()
         mock_gov.get_arrivals = AsyncMock(return_value=[])
 
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
         await coordinator.async_refresh()
 
         assert coordinator.update_interval == timedelta(minutes=5)
@@ -511,9 +469,7 @@ class TestGovIntervalAdjustment:
             ]
         )
 
-        coordinator = _make_gov_coordinator(
-            hass, simple_mock_config_entry, mock_gov
-        )
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
         await coordinator.async_refresh()
 
         # Either 2min (day) or 5min (night) depending on test execution time

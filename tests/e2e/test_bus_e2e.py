@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -117,9 +116,7 @@ class TestCompleteBusFlow:
             "24068", lines=["249", "40", "605"]
         )
 
-    async def test_sensor_recovers_after_api_failure(
-        self, hass: HomeAssistant
-    ):
+    async def test_sensor_recovers_after_api_failure(self, hass: HomeAssistant):
         """API fails → coordinator retries → eventually succeeds."""
         entry = MockConfigEntry(
             domain=DOMAIN,
@@ -163,9 +160,7 @@ class TestCompleteBusFlow:
         assert coordinator.get_next_arrival("249")["minutes_until"] == 5
 
         # Simulate API failure on next update
-        mock_client.get_arrivals = AsyncMock(
-            side_effect=Exception("API down")
-        )
+        mock_client.get_arrivals = AsyncMock(side_effect=Exception("API down"))
 
         await coordinator.async_refresh()
         await hass.async_block_till_done()

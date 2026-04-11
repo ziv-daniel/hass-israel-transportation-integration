@@ -11,7 +11,6 @@ from homeassistant.core import HomeAssistant
 
 from custom_components.israel_transportation.const import (
     CONF_BUS_LINES,
-    CONF_STATION_ID,
     DOMAIN,
 )
 

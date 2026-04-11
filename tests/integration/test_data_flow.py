@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -179,18 +178,14 @@ class TestBusDataFlow:
         assert coordinator.data == {}
         assert coordinator.get_next_arrival("249") is None
 
-    async def test_bus_api_error_raises_update_failed(
-        self, hass: HomeAssistant
-    ):
+    async def test_bus_api_error_raises_update_failed(self, hass: HomeAssistant):
         """Gov API raises → coordinator first refresh fails → entry in SETUP_RETRY."""
         entry = _make_bus_config_entry()
         entry.add_to_hass(hass)
 
         mock_client = MagicMock()
         mock_client.validate_station = AsyncMock(return_value=True)
-        mock_client.get_arrivals = AsyncMock(
-            side_effect=Exception("API is down")
-        )
+        mock_client.get_arrivals = AsyncMock(side_effect=Exception("API is down"))
 
         with patch(
             "custom_components.israel_transportation.GovApiClient",
@@ -202,9 +197,7 @@ class TestBusDataFlow:
         # First refresh failure causes SETUP_RETRY
         assert entry.state == ConfigEntryState.SETUP_RETRY
 
-    async def test_coordinator_uses_gov_api_not_busnearby(
-        self, hass: HomeAssistant
-    ):
+    async def test_coordinator_uses_gov_api_not_busnearby(self, hass: HomeAssistant):
         """Bus setup creates coordinator with gov_api_client, NOT api_client."""
         entry = _make_bus_config_entry()
         entry.add_to_hass(hass)
