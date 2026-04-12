@@ -39,7 +39,7 @@ jobs:
           ls -lh cities_index.json*
 
       - name: Upload GTFS data to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             custom_components/israel_transportation/gtfs_data/cities_index.json.gz
