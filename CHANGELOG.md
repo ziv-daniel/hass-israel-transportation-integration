@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-08-19
+
+### Fixed
+- Bus and light rail were completely broken: `bus.gov.il` removed the `/WebApi/api/passengerinfo` API this integration depended on, and every configured station failed setup with "Station is not accessible." Ported the client to the API the MOT's own [route planner](https://route.bus.gov.il) uses (`api.bus.gov.il`), which needs no authentication.
+- Setup no longer validates a station against the live API. A single upstream outage used to leave already-working stations permanently stuck in `setup_retry` with no entities at all; entries now stay loaded and their sensors report `unavailable` until the API recovers.
+- The bus stop-arrivals request used UTC to ask for "today's" service day. Between midnight and ~02:00–03:00 Israel time this asked the API for yesterday, which returns zero routes — every bus sensor would go blank overnight. Now uses Israel local time.
+- An empty route list from the API was cached for a full hour, so a transient gap (including the UTC bug above) kept sensors blank long after service resumed. Empty results are no longer cached.
+- A total API outage was silently recorded as a *successful* update with no arrivals, so sensors read "no bus" during an outage instead of `unavailable`, and a rate limit never reached the coordinator's backoff. Failures now propagate correctly.
+- "Browse stations by city" failed with an unlogged HTTP 400 for both bus and light rail — a form field was misconfigured (a list of options passed where the UI expected a single autocomplete string). Replaced with the correct dropdown selector.
+- The bundled station index is keyed by GTFS `stop_id`, while the live API addresses stops by `stop_code` — different identifiers that happen to share a numeric range, so a station picked from the city browser could silently resolve to the wrong stop. The config flow now resolves the correct code before saving.
+- `gtfs_loader.py` performed synchronous file I/O from async functions, both blocking the event loop and (for the background refresh) risking a mid-write cancellation. All of it now runs off the event loop, and the refresh is a tracked background task instead of a bare fire-and-forget.
+- Upstream failures are now distinguishable in the log: a non-JSON response is logged with its content type and the first bytes of the body instead of a generic connection error.
+
+### Added
+- A brand icon, shipped locally under `custom_components/israel_transportation/brand/` (requires Home Assistant 2026.3.0+ to render; earlier cores fall back to no icon).
+
+### Changed
+- `is_realtime` on each arrival now reflects what the API actually reports, instead of always being `true`.
+- Requests for a stop's arrivals are limited to the lines you've configured and bounded in concurrency, so a busy interchange (Tel Aviv Savidor alone serves 50+ routes) doesn't fire a burst of requests every poll.
+- README rewritten to match current behavior — it previously documented a different, no-longer-used data source.
+
 ## [1.1.0] - 2026-04-12
 
 ### Fixed
