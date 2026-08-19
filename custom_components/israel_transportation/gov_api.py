@@ -14,7 +14,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from typing import Any, Optional
 
 import aiohttp
@@ -33,6 +34,9 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Service days are defined in Israeli local time regardless of where HA runs.
+ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
+
 
 class GovApiError(Exception):
     """Base exception for MOT API errors."""
@@ -46,8 +50,13 @@ class ApiConnectionError(GovApiError):
     """Exception raised when connection to API fails."""
 
 
-class ApiTimeoutError(GovApiError):
-    """Exception raised when API request times out."""
+class ApiTimeoutError(ApiConnectionError):
+    """Exception raised when API request times out.
+
+    Subclasses ApiConnectionError so callers that handle "could not reach the
+    API" catch timeouts too — the config flow reports them as cannot_connect
+    rather than as an unknown error.
+    """
 
 
 class InvalidMakatError(GovApiError):
@@ -111,7 +120,9 @@ class GovApiClient:
         }
         # Which routes serve a stop changes rarely, but arrival times need the
         # route descriptors from it on every poll — so cache it per stop.
-        self._routes_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+        self._routes_cache: dict[
+            tuple[str, str], tuple[float, list[dict[str, Any]]]
+        ] = {}
 
     async def __aenter__(self) -> GovApiClient:
         """Async context manager entry."""
@@ -322,11 +333,15 @@ class GovApiClient:
         Cached for MOT_ROUTES_CACHE_TTL — this is reference data, but every
         arrivals poll needs the route descriptors it returns.
         """
-        cached = self._routes_cache.get(makat)
+        cache_key = (makat, locale)
+        cached = self._routes_cache.get(cache_key)
         if cached and (time.monotonic() - cached[0]) < MOT_ROUTES_CACHE_TTL:
             return cached[1]
 
-        day = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        # The service day must be Israel-local. Asking for a past date returns
+        # zero routes, so using UTC would blank every stop between midnight and
+        # 02:00/03:00 local, when the UTC date is still yesterday.
+        day = datetime.now(ISRAEL_TZ).replace(tzinfo=None).isoformat()
         data = await self._make_request(
             "Stops/RefreshStopTimesAtStop",
             {"stopCode": makat, "day": day},
@@ -361,7 +376,11 @@ class GovApiClient:
                     }
                 )
 
-        self._routes_cache[makat] = (time.monotonic(), routes)
+        # Only cache a non-empty result. An empty list is usually transient — a
+        # night-time gap or an upstream hiccup — and pinning it for the full TTL
+        # would keep the stop blank for an hour after service resumed.
+        if routes:
+            self._routes_cache[cache_key] = (time.monotonic(), routes)
         return routes
 
     async def get_arrivals(
@@ -394,7 +413,19 @@ class GovApiClient:
         routes = await self._get_routes_at_stop(makat, locale=locale)
         if lines:
             wanted = {str(line).strip() for line in lines}
+            available = {route["line"] for route in routes}
             routes = [route for route in routes if route["line"] in wanted]
+            if available and not routes:
+                # Line numbers are matched verbatim against upstream, and Hebrew
+                # suffixes make near-misses easy ("1" vs "1א"). Without this the
+                # user just gets permanently empty sensors and no explanation.
+                _LOGGER.warning(
+                    "None of the configured lines %s serve stop %s. "
+                    "Lines available at this stop: %s",
+                    sorted(wanted),
+                    makat,
+                    sorted(available),
+                )
 
         _LOGGER.debug(
             "Fetching times for %d route(s) at makat %s (lines filter: %s)",
@@ -433,8 +464,12 @@ class GovApiClient:
         )
 
         arrivals: list[dict[str, Any]] = []
+        failures: list[BaseException] = []
         for route, result in zip(routes, results):
+            if isinstance(result, asyncio.CancelledError):
+                raise result
             if isinstance(result, BaseException):
+                failures.append(result)
                 _LOGGER.debug(
                     "Failed to fetch times for line %s at makat %s: %s",
                     route["line"],
@@ -445,6 +480,35 @@ class GovApiClient:
             if not result:
                 continue
             arrivals.append({**route, "arrivals": result})
+
+        # A rate limit must reach the coordinator so it can back off, rather than
+        # being smoothed into "no buses" while we keep hammering the API.
+        for failure in failures:
+            if isinstance(failure, RateLimitError):
+                raise failure
+
+        # If every route failed, the stop does not have "no arrivals" — we simply
+        # do not know. Report it, so the entity goes unavailable and the reason is
+        # visible, instead of silently rendering an outage as an empty timetable.
+        if failures and len(failures) == len(routes):
+            _LOGGER.warning(
+                "All %d route time lookups failed for makat %s; reporting the "
+                "update as failed. First error: %s",
+                len(routes),
+                makat,
+                failures[0],
+            )
+            raise failures[0]
+
+        if failures:
+            _LOGGER.warning(
+                "%d of %d route time lookups failed for makat %s; "
+                "returning partial results. First error: %s",
+                len(failures),
+                len(routes),
+                makat,
+                failures[0],
+            )
 
         return arrivals
 

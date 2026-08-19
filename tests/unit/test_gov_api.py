@@ -9,6 +9,7 @@ from custom_components.israel_transportation.gov_api import (
     GovApiClient,
     InvalidMakatError,
     InvalidResponseError,
+    RateLimitError,
 )
 
 # Shapes below mirror real api.bus.gov.il responses (the `data` payload, which is
@@ -331,3 +332,139 @@ class TestSearchStations:
             async with GovApiClient() as client:
                 assert await client.search_stations("   ") == []
             mock_request.assert_not_called()
+
+
+class TestArrivalFailureHandling:
+    """An outage must not be indistinguishable from 'no buses are coming'."""
+
+    @pytest.mark.asyncio
+    async def test_all_routes_failing_raises(self):
+        """If every route lookup fails we don't know the times — say so.
+
+        Returning [] here would make the coordinator record a *successful*
+        update with empty data, so entities would show "no arrivals" during a
+        total upstream outage and nothing above DEBUG would be logged.
+        """
+
+        async def fake_request(path, params=None, base_url=None, locale="he"):
+            if path == "Stops/RefreshStopTimesAtStop":
+                return ROUTES_AT_STOP_RESPONSE
+            raise InvalidResponseError("upstream is serving HTML again")
+
+        with patch.object(GovApiClient, "_make_request", side_effect=fake_request):
+            async with GovApiClient() as client:
+                with pytest.raises(InvalidResponseError):
+                    await client.get_arrivals("12665")
+
+    @pytest.mark.asyncio
+    async def test_rate_limit_propagates(self):
+        """A 429 must reach the coordinator so it backs off instead of hammering."""
+
+        async def fake_request(path, params=None, base_url=None, locale="he"):
+            if path == "Stops/RefreshStopTimesAtStop":
+                return ROUTES_AT_STOP_RESPONSE
+            if params["routeDesc"] == "39001-1-1":
+                raise RateLimitError(retry_after=30)
+            return _times_response("12665", [(8, False)])
+
+        with patch.object(GovApiClient, "_make_request", side_effect=fake_request):
+            async with GovApiClient() as client:
+                with pytest.raises(RateLimitError):
+                    await client.get_arrivals("12665")
+
+    @pytest.mark.asyncio
+    async def test_partial_failure_returns_what_it_has(self):
+        """One route failing must not discard the routes that succeeded."""
+
+        async def fake_request(path, params=None, base_url=None, locale="he"):
+            if path == "Stops/RefreshStopTimesAtStop":
+                return ROUTES_AT_STOP_RESPONSE
+            if params["routeDesc"] == "39001-1-1":
+                raise InvalidResponseError("one bad route")
+            return _times_response("12665", [(8, False)])
+
+        with patch.object(GovApiClient, "_make_request", side_effect=fake_request):
+            async with GovApiClient() as client:
+                result = await client.get_arrivals("12665")
+
+        assert [entry["line"] for entry in result] == ["5"]
+
+
+class TestServiceDay:
+    """The service day is Israel-local; a past date returns zero routes."""
+
+    @pytest.mark.asyncio
+    async def test_day_is_israel_local_not_utc(self):
+        """Between midnight and 03:00 local, UTC is still yesterday.
+
+        Asking the API for a past date returns no routes at all, so using UTC
+        would blank every stop for the first hours of each day.
+        """
+        from datetime import datetime
+
+        from custom_components.israel_transportation.gov_api import ISRAEL_TZ
+
+        seen = {}
+
+        async def fake_request(path, params=None, base_url=None, locale="he"):
+            seen.update(params or {})
+            return {"routesInStop": []}
+
+        with patch.object(GovApiClient, "_make_request", side_effect=fake_request):
+            async with GovApiClient() as client:
+                await client.get_arrivals("12665")
+
+        assert seen["day"].startswith(datetime.now(ISRAEL_TZ).strftime("%Y-%m-%d"))
+
+
+class TestRoutesCache:
+    """Caching behaviour around the per-stop route list."""
+
+    @pytest.mark.asyncio
+    async def test_empty_route_list_is_not_cached(self):
+        """A transient empty result must not pin the stop blank for an hour."""
+        calls = []
+
+        async def fake_request(path, params=None, base_url=None, locale="he"):
+            calls.append(path)
+            if len(calls) == 1:
+                return {"routesInStop": []}
+            if path == "Stops/RefreshStopTimesAtStop":
+                return ROUTES_AT_STOP_RESPONSE
+            return _times_response("12665", [(4, False)])
+
+        with patch.object(GovApiClient, "_make_request", side_effect=fake_request):
+            async with GovApiClient() as client:
+                assert await client.get_arrivals("12665") == []
+                # Second poll must retry rather than serve the cached empty list.
+                assert len(await client.get_arrivals("12665")) == 2
+
+    @pytest.mark.asyncio
+    async def test_cache_is_keyed_by_locale(self):
+        """Cached direction/operator text is locale-specific."""
+        route_calls = []
+
+        async def fake_request(path, params=None, base_url=None, locale="he"):
+            if path == "Stops/RefreshStopTimesAtStop":
+                route_calls.append(locale)
+                return ROUTES_AT_STOP_RESPONSE
+            return _times_response("12665", [(4, False)])
+
+        with patch.object(GovApiClient, "_make_request", side_effect=fake_request):
+            async with GovApiClient() as client:
+                await client.get_arrivals("12665", locale="he")
+                await client.get_arrivals("12665", locale="en")
+
+        assert route_calls == ["he", "en"]
+
+
+class TestTimeoutIsAConnectionError:
+    """Callers handling 'cannot reach the API' must catch timeouts too."""
+
+    def test_timeout_subclasses_connection_error(self):
+        from custom_components.israel_transportation.gov_api import (
+            ApiConnectionError,
+            ApiTimeoutError,
+        )
+
+        assert issubclass(ApiTimeoutError, ApiConnectionError)
