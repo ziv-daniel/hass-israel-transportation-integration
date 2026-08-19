@@ -565,6 +565,13 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         Returns:
             The matching stop code, or None if it could not be resolved.
         """
+        # Newer GTFS index builds carry the stop_code directly; use it and skip
+        # the search entirely. Older bundled data predates that field, hence the
+        # name-and-coordinates fallback below.
+        code = str(gtfs_station.get("code") or "").strip()
+        if code.isascii() and code.isdigit():
+            return code
+
         name = gtfs_station.get("name") or ""
         lat = gtfs_station.get("lat")
         lon = gtfs_station.get("lon")

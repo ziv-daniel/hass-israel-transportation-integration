@@ -644,3 +644,26 @@ class TestResolveMakat:
             client, {"id": "1", "name": "Y", "lat": None, "lon": None}
         )
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_uses_stop_code_from_index_when_present(self):
+        """Newer GTFS builds carry stop_code — use it and skip the search."""
+        client = AsyncMock()
+        gtfs_station = {"id": "44592", "code": "12665", "name": "X", "lat": 1, "lon": 2}
+
+        makat = await self._flow()._resolve_makat(client, gtfs_station)
+
+        assert makat == "12665"
+        client.search_stations.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_search_on_older_index(self):
+        """Data without stop_code still resolves via name + coordinates."""
+        client = AsyncMock()
+        client.search_stations.return_value = [
+            {"makat": "12665", "name": "X", "lat": 31.5407, "lon": 34.5963}
+        ]
+        gtfs_station = {"id": "44592", "name": "X", "lat": 31.5407, "lon": 34.5963}
+
+        assert await self._flow()._resolve_makat(client, gtfs_station) == "12665"
+        client.search_stations.assert_awaited_once()

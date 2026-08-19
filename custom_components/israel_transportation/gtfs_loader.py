@@ -95,7 +95,9 @@ async def _download_asset(
         _LOGGER.error(f"Timeout downloading {filename}")
         return False
 
-    dest.write_bytes(data)
+    # Run the write in a thread: this is called from the event loop and HA
+    # flags synchronous file I/O there as a blocking call.
+    await asyncio.to_thread(dest.write_bytes, data)
     _LOGGER.info(f"Saved {filename} ({len(data):,} bytes) → {dest}")
     return True
 
@@ -111,7 +113,7 @@ async def download_gtfs_data_from_release() -> bool:
         return False
 
     gtfs_dir = get_gtfs_data_path()
-    gtfs_dir.mkdir(parents=True, exist_ok=True)
+    await asyncio.to_thread(gtfs_dir.mkdir, parents=True, exist_ok=True)
 
     cities_path = gtfs_dir / GTFS_ASSET_NAME
     routes_path = gtfs_dir / ROUTES_ASSET_NAME
@@ -129,7 +131,8 @@ async def download_gtfs_data_from_release() -> bool:
 
     # Validate cities_index.json
     try:
-        cities_data = json.loads(cities_path.read_bytes())
+        raw = await asyncio.to_thread(cities_path.read_bytes)
+        cities_data = json.loads(raw)
         city_count = len(cities_data)
         station_count = sum(len(c["stations"]) for c in cities_data.values())
         _LOGGER.info(
@@ -137,7 +140,7 @@ async def download_gtfs_data_from_release() -> bool:
         )
     except (json.JSONDecodeError, KeyError) as e:
         _LOGGER.error(f"Downloaded cities_index.json is invalid: {e}")
-        cities_path.unlink(missing_ok=True)
+        await asyncio.to_thread(cities_path.unlink, missing_ok=True)
         return False
 
     if not routes_ok:
@@ -150,7 +153,7 @@ async def download_gtfs_data_from_release() -> bool:
     _CITIES_INDEX_CACHE = None
     _ROUTES_INDEX_CACHE = None
 
-    _mark_gtfs_updated()
+    await asyncio.to_thread(_mark_gtfs_updated)
     return True
 
 
@@ -307,7 +310,7 @@ async def async_load_cities_index() -> Dict:
 
     index_path = get_gtfs_data_path() / GTFS_ASSET_NAME
 
-    if not index_path.exists():
+    if not await asyncio.to_thread(index_path.exists):
         # First install or HACS didn't bundle the file — download now (blocking)
         _LOGGER.warning(
             "GTFS data not found locally. Downloading from gtfs-data-latest release..."
@@ -320,7 +323,7 @@ async def async_load_cities_index() -> Dict:
                 f"https://github.com/{GITHUB_REPO}/releases/tag/{GTFS_DATA_TAG}"
             )
         _LOGGER.info("GTFS data downloaded successfully.")
-    elif _gtfs_is_stale():
+    elif await asyncio.to_thread(_gtfs_is_stale):
         # Data exists but is >7 days old — refresh in background, serve stale for now
         _LOGGER.info("GTFS data is stale (>7 days). Refreshing in background...")
         asyncio.ensure_future(download_gtfs_data_from_release())
