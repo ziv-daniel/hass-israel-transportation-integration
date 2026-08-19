@@ -18,9 +18,10 @@ updates:
       - "dependencies"
       - "python"
     ignore:
-      # pytest and pytest-asyncio are pinned by pytest-homeassistant-custom-component,
-      # which requires an exact pytest. Bumping them independently made
-      # requirements_test.txt unresolvable and broke CI. Upgrade them only together
-      # with a phcc release that supports the newer version.
+      # pytest, pytest-asyncio and pytest-cov are pinned exactly by
+      # pytest-homeassistant-custom-component. Giving them our own floors made
+      # requirements_test.txt unresolvable twice, so they are unconstrained in
+      # requirements_test.txt and phcc decides. Nothing for dependabot to do.
       - dependency-name: "pytest"
       - dependency-name: "pytest-asyncio"
+      - dependency-name: "pytest-cov"

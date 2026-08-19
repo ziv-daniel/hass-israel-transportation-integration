@@ -897,3 +897,97 @@ async def test_generic_exception_handling(hass: HomeAssistant):
         # Should show unknown error (caught by generic exception handler)
         assert result["type"] == FlowResultType.FORM
         assert result["errors"] == {"base": ERROR_UNKNOWN}
+
+
+class TestFormSchemasSerialize:
+    """Every form schema must survive the serialization the HTTP API performs.
+
+    Regression test for #26. The city and station pickers passed a *list* of
+    options to TextSelectorConfig(autocomplete=...), which expects an HTML
+    autocomplete attribute string. The flow logic itself worked, so the existing
+    tests all passed — but the frontend request died with an unlogged HTTP 400
+    because the schema could not be converted, and the user saw only
+    "Unknown error occurred". Driving the flow in-process never caught it; only
+    serializing the schema does.
+    """
+
+    @staticmethod
+    def _serialize(result):
+        import voluptuous_serialize
+        from homeassistant.helpers import config_validation as cv
+
+        return voluptuous_serialize.convert(
+            result["data_schema"], custom_serializer=cv.custom_serializer
+        )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("transport_type", ["bus", "light_rail"])
+    async def test_city_picker_schema_serializes(self, hass, transport_type):
+        """Browse-by-city renders for both bus and light rail."""
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"transport_type": transport_type}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"selection_method": "city_dropdown"}
+        )
+
+        assert result["step_id"] == "select_city"
+        assert not result["errors"]
+
+        fields = self._serialize(result)
+        city_field = next(f for f in fields if f["name"] == "city_id")
+        options = city_field["selector"]["select"]["options"]
+        assert len(options) > 1
+        assert all("value" in o and "label" in o for o in options)
+
+    @pytest.mark.asyncio
+    async def test_station_picker_schema_serializes(self, hass):
+        """The station list for a city renders too."""
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"transport_type": "bus"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"selection_method": "city_dropdown"}
+        )
+
+        city_field = next(f for f in self._serialize(result) if f["name"] == "city_id")
+        real_city = next(
+            o["value"]
+            for o in city_field["selector"]["select"]["options"]
+            if o["value"] not in ("show_all", "manual")
+        )
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"city_id": real_city}
+        )
+
+        assert result["step_id"] == "select_station"
+        station_field = next(
+            f for f in self._serialize(result) if f["name"] == "station_id"
+        )
+        assert station_field["selector"]["select"]["options"]
+
+    @pytest.mark.asyncio
+    async def test_show_all_cities_schema_serializes(self, hass):
+        """The 'show all cities' branch renders as well."""
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"transport_type": "bus"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"selection_method": "city_dropdown"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"city_id": "show_all"}
+        )
+
+        assert result["step_id"] == "select_city_all"
+        assert self._serialize(result)

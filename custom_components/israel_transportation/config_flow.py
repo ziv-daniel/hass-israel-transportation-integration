@@ -22,8 +22,13 @@ from .gov_api import (
     ApiConnectionError as GovApiConnectionError,
     GovApiClient,
     InvalidMakatError,
+    InvalidResponseError as GovInvalidResponseError,
 )
 from homeassistant.helpers.selector import (
+    SelectOptionDict,
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
     TextSelector,
     TextSelectorConfig,
     TextSelectorType,
@@ -160,7 +165,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """
         # Pre-load GTFS data asynchronously to avoid blocking I/O warnings
         try:
-            await async_load_cities_index()
+            await async_load_cities_index(self.hass)
         except FileNotFoundError:
             pass  # Will be handled by is_gtfs_data_available() check below
 
@@ -242,14 +247,13 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """
         errors: dict[str, str] = {}
 
-        _LOGGER.info("=== async_step_select_city ENTRY ===")
-        _LOGGER.info("user_input=%s", user_input)
-        _LOGGER.info("user_input type=%s", type(user_input))
+        _LOGGER.debug("user_input=%s", user_input)
+        _LOGGER.debug("user_input type=%s", type(user_input))
 
         if user_input is not None:
             try:
                 city_input = user_input.get("city_id", "").strip()
-                _LOGGER.info(
+                _LOGGER.debug(
                     "Received city_input: %r (type: %s, len: %d)",
                     city_input,
                     type(city_input),
@@ -262,30 +266,28 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 match = re.search(r"\[([^\]]+)\]$", city_input)
                 if match:
                     city_id = match.group(1)
-                    _LOGGER.info("Extracted city_id: %r from input", city_id)
+                    _LOGGER.debug("Extracted city_id: %r from input", city_id)
                 else:
                     # Fallback: use input directly (might be manual entry)
                     city_id = city_input
-                    _LOGGER.info("Using raw input as city_id: %r", city_id)
+                    _LOGGER.debug("Using raw input as city_id: %r", city_id)
 
                 # Handle special options
                 if city_id == "manual" or "manual" in city_input.lower():
-                    _LOGGER.info("Manual entry selected")
+                    _LOGGER.debug("Manual entry selected")
                     return await self.async_step_station_config()
                 if city_id == "show_all" or "show all" in city_input.lower():
-                    _LOGGER.info("Show all cities selected")
+                    _LOGGER.debug("Show all cities selected")
                     return await self.async_step_select_city_all()
 
                 # Save selected city and move to station selection
-                _LOGGER.info("Setting _selected_city to: %r", city_id)
+                _LOGGER.debug("Setting _selected_city to: %r", city_id)
                 self._selected_city = city_id
-                _LOGGER.info("Calling async_step_select_station()")
+                _LOGGER.debug("Calling async_step_select_station()")
                 return await self.async_step_select_station()
-            except Exception as e:
-                _LOGGER.error(
-                    "Exception in async_step_select_city: %s", str(e), exc_info=True
-                )
-                errors["base"] = "unknown"
+            except Exception:  # pylint: disable=broad-except
+                _LOGGER.exception("Unexpected exception while selecting a city")
+                errors["base"] = ERROR_UNKNOWN
 
         # Get home location for proximity sorting
         home_lat = self.hass.config.latitude
@@ -299,36 +301,31 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             # No GTFS data available, fall back to manual entry
             return await self.async_step_station_config()
 
-        # Build city options as autocomplete list
-        # Using TextSelector with autocomplete instead of vol.In to work around validation issues
-        autocomplete_list: list[str] = []
+        # Cities are already sorted: nearby first (with 📍), then alphabetical.
+        options = [
+            SelectOptionDict(value=city["id"], label=city["name"]) for city in cities
+        ]
+        options.append(
+            SelectOptionDict(value="show_all", label="📋 Show all cities...")
+        )
+        options.append(
+            SelectOptionDict(value="manual", label="🔍 Enter station ID manually...")
+        )
 
-        # Add all cities (already sorted: nearby first with 📍, then alphabetical)
-        for city in cities:
-            # Format: "City Name (city_id)" to allow extraction of city_id later
-            autocomplete_list.append(f"{city['name']} [{city['id']}]")
+        _LOGGER.debug("Built city dropdown with %d options", len(options))
 
-        # Add special options at the end
-        autocomplete_list.append("📋 Show all cities... [show_all]")
-        autocomplete_list.append("🔍 Enter station ID manually... [manual]")
-
-        _LOGGER.info("Built autocomplete_list with %d entries", len(autocomplete_list))
-        _LOGGER.info("First 5 entries: %s", autocomplete_list[:5])
-
-        # Use TextSelector with autocomplete - same pattern as station selection which works
         data_schema = vol.Schema(
             {
-                vol.Required("city_id"): TextSelector(
-                    TextSelectorConfig(
-                        type=TextSelectorType.TEXT,
-                        autocomplete=autocomplete_list,
-                        multiline=False,
+                vol.Required("city_id"): SelectSelector(
+                    SelectSelectorConfig(
+                        options=options,
+                        mode=SelectSelectorMode.DROPDOWN,
+                        custom_value=True,
+                        sort=False,
                     )
                 ),
             }
         )
-
-        _LOGGER.info("Using TextSelector with autocomplete for city selection")
 
         return self.async_show_form(
             step_id="select_city",
@@ -378,22 +375,21 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if not cities:
             return await self.async_step_station_config()
 
-        # Build city options as autocomplete list
-        autocomplete_list: list[str] = []
-        for city in cities:
-            autocomplete_list.append(f"{city['name']} [{city['id']}]")
+        options = [
+            SelectOptionDict(value=city["id"], label=city["name"]) for city in cities
+        ]
+        options.append(
+            SelectOptionDict(value="manual", label="🔍 Enter station ID manually...")
+        )
 
-        # Add manual entry option
-        autocomplete_list.append("🔍 Enter station ID manually... [manual]")
-
-        # Use TextSelector with autocomplete - same pattern as station selection
         data_schema = vol.Schema(
             {
-                vol.Required("city_id"): TextSelector(
-                    TextSelectorConfig(
-                        type=TextSelectorType.TEXT,
-                        autocomplete=autocomplete_list,
-                        multiline=False,
+                vol.Required("city_id"): SelectSelector(
+                    SelectSelectorConfig(
+                        options=options,
+                        mode=SelectSelectorMode.DROPDOWN,
+                        custom_value=True,
+                        sort=False,
                     )
                 ),
             }
@@ -421,9 +417,8 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         Returns:
             Flow result
         """
-        _LOGGER.info("=== async_step_select_station ENTRY ===")
-        _LOGGER.info("user_input=%s", user_input)
-        _LOGGER.info("_selected_city=%s", self._selected_city)
+        _LOGGER.debug("user_input=%s", user_input)
+        _LOGGER.debug("_selected_city=%s", self._selected_city)
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -481,6 +476,11 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 except GovApiConnectionError:
                     errors["base"] = ERROR_CANNOT_CONNECT
+                except GovInvalidResponseError:
+                    # Upstream answered, but not with its API — surface it as a
+                    # connection problem rather than a mystery "unknown error".
+                    _LOGGER.exception("MOT API returned an unexpected response")
+                    errors["base"] = ERROR_CANNOT_CONNECT
                 except Exception:  # pylint: disable=broad-except
                     _LOGGER.exception("Unexpected exception during MOT API validation")
                     errors["base"] = ERROR_UNKNOWN
@@ -489,11 +489,11 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Get stations for selected city
         try:
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Fetching stations for city: %r", self._selected_city or "Other"
             )
             stations = get_stations_for_city(self._selected_city or "Other")
-            _LOGGER.info(
+            _LOGGER.debug(
                 "Found %d stations for city %r", len(stations), self._selected_city
             )
         except Exception as e:
@@ -514,25 +514,26 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             )
             return await self.async_step_station_config()
 
-        # Build autocomplete list with TextSelector (no 100-station limit!)
-        # Sort all stations alphabetically by name
         sorted_stations = sorted(stations, key=lambda s: s["name"])
 
-        # Create autocomplete suggestions (show all stations)
-        autocomplete_list = [
-            f"{station['name']} ({station['id']})" for station in sorted_stations
+        options = [
+            SelectOptionDict(
+                value=station["id"], label=f"{station['name']} ({station['id']})"
+            )
+            for station in sorted_stations
         ]
-
-        # Add manual entry option
-        autocomplete_list.append("manual - Enter station ID manually")
+        options.append(
+            SelectOptionDict(value="manual", label="🔍 Enter station ID manually...")
+        )
 
         data_schema = vol.Schema(
             {
-                vol.Required("station_id"): TextSelector(
-                    TextSelectorConfig(
-                        type=TextSelectorType.TEXT,
-                        autocomplete=autocomplete_list,
-                        multiline=False,
+                vol.Required("station_id"): SelectSelector(
+                    SelectSelectorConfig(
+                        options=options,
+                        mode=SelectSelectorMode.DROPDOWN,
+                        custom_value=True,
+                        sort=False,
                     )
                 ),
             }
@@ -704,6 +705,10 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 except InvalidMakatError:
                     errors["base"] = ERROR_STATION_NOT_FOUND
                 except GovApiConnectionError:
+                    _LOGGER.warning("Could not reach the MOT API", exc_info=True)
+                    errors["base"] = ERROR_CANNOT_CONNECT
+                except GovInvalidResponseError:
+                    _LOGGER.exception("MOT API returned an unexpected response")
                     errors["base"] = ERROR_CANNOT_CONNECT
                 except Exception:  # pylint: disable=broad-except
                     _LOGGER.exception("Unexpected exception during station validation")
