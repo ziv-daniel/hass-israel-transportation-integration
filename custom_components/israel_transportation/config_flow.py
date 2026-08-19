@@ -438,46 +438,51 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             selected_station = self._find_station_by_input(stations, station_input)
 
             if selected_station:
-                station_id = selected_station["id"]
                 self._station_name = selected_station["name"]
 
-                # Validate the GTFS station ID (stop_code/makat) directly via gov API.
-                # The gov API uses makat (stop_code) — same value that GTFS stores —
-                # so no translation is needed. Using BusNearby to translate to stop_id
-                # was the source of the mismatch bug (the coordinator uses gov API at runtime).
+                # The bundled GTFS index is keyed by GTFS stop_id, but the MOT API
+                # addresses stops by stop_code (makat) — different identifiers that
+                # happen to share a numeric range, so passing the stop_id through
+                # silently resolves to a *different* station. Translate first.
                 try:
                     async with GovApiClient(
                         async_get_clientsession(self.hass)
                     ) as gov_client:
-                        station_info = await gov_client.get_station(station_id)
+                        makat = await self._resolve_makat(gov_client, selected_station)
 
-                        if (
-                            station_info.get("Name") is None
-                            or station_info.get("Makat", 0) == 0
-                        ):
-                            _LOGGER.error(
-                                "GTFS station %s failed gov API validation: %s",
-                                station_id,
-                                station_info,
-                            )
+                        if makat is None:
                             errors["base"] = ERROR_STATION_NOT_FOUND
                         else:
-                            # Store the makat (stop_code) — this is what gov API expects at runtime
-                            self._station_id = station_id
-                            self._station_name = station_info.get(
-                                "Name", self._station_name
-                            )
-                            _LOGGER.debug(
-                                "GTFS station validated via gov API: makat=%s, name=%s",
-                                station_id,
-                                self._station_name,
-                            )
-                            return await self.async_step_bus_lines()
+                            station_info = await gov_client.get_station(makat)
+
+                            if (
+                                station_info.get("Name") is None
+                                or station_info.get("Makat", 0) == 0
+                            ):
+                                _LOGGER.error(
+                                    "Station %s failed MOT API validation: %s",
+                                    makat,
+                                    station_info,
+                                )
+                                errors["base"] = ERROR_STATION_NOT_FOUND
+                            else:
+                                # Store the makat — this is what the API expects at runtime
+                                self._station_id = makat
+                                self._station_name = station_info.get(
+                                    "Name", self._station_name
+                                )
+                                _LOGGER.debug(
+                                    "Station resolved: gtfs_stop_id=%s -> makat=%s (%s)",
+                                    selected_station["id"],
+                                    makat,
+                                    self._station_name,
+                                )
+                                return await self.async_step_bus_lines()
 
                 except GovApiConnectionError:
                     errors["base"] = ERROR_CANNOT_CONNECT
                 except Exception:  # pylint: disable=broad-except
-                    _LOGGER.exception("Unexpected exception during gov API validation")
+                    _LOGGER.exception("Unexpected exception during MOT API validation")
                     errors["base"] = ERROR_UNKNOWN
             else:
                 errors["base"] = ERROR_STATION_NOT_FOUND
@@ -542,6 +547,60 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "station_count": str(len(stations)),
             },
         )
+
+    async def _resolve_makat(
+        self, gov_client: GovApiClient, gtfs_station: dict
+    ) -> Optional[str]:
+        """Translate a bundled-GTFS station into the MOT API's stop code.
+
+        The GTFS index stores GTFS ``stop_id``; the API addresses stops by
+        ``stop_code`` (the number on the stop sign). Both are small integers, so a
+        stop_id passed to the API usually resolves to a real but *different*
+        station. Resolve by searching the station's name and matching on position.
+
+        Args:
+            gov_client: Client to search with.
+            gtfs_station: Station dict from the GTFS index (``name``/``lat``/``lon``).
+
+        Returns:
+            The matching stop code, or None if it could not be resolved.
+        """
+        name = gtfs_station.get("name") or ""
+        lat = gtfs_station.get("lat")
+        lon = gtfs_station.get("lon")
+
+        candidates = await gov_client.search_stations(name)
+        if not candidates:
+            _LOGGER.warning("No MOT API match for GTFS station %r", name)
+            return None
+
+        if lat is None or lon is None:
+            # Without coordinates we can only trust an unambiguous name match.
+            return candidates[0]["makat"] if len(candidates) == 1 else None
+
+        # ~0.002 degrees is roughly 200m — close enough to be the same stop,
+        # tight enough to not pick the one across the street.
+        best = None
+        best_distance = 0.002
+        for candidate in candidates:
+            c_lat, c_lon = candidate.get("lat"), candidate.get("lon")
+            if c_lat is None or c_lon is None:
+                continue
+            distance = max(abs(c_lat - lat), abs(c_lon - lon))
+            if distance < best_distance:
+                best_distance = distance
+                best = candidate
+
+        if best is None:
+            _LOGGER.warning(
+                "Found %d MOT API candidates for %r but none within range of the "
+                "GTFS coordinates; ask the user for the stop code instead",
+                len(candidates),
+                name,
+            )
+            return None
+
+        return best["makat"]
 
     def _find_station_by_input(
         self, stations: list[dict], user_input: str

@@ -472,19 +472,14 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         processed: dict[str, list[dict[str, Any]]] = {}
 
         for arrival in arrivals:
-            line_number = arrival.get("Shilut")
+            line_number = arrival.get("line")
             if not line_number:
                 continue
 
-            minutes_list = arrival.get("MinutesToArrivalList", [])
-            if not minutes_list:
-                # Fallback to single value
-                single_min = arrival.get("MinutesToArrival")
-                if single_min is not None:
-                    minutes_list = [single_min]
+            line_times = arrival.get("arrivals") or []
 
-            direction = arrival.get("Description", "").strip()
-            operator = arrival.get("CompanyName", "")
+            direction = (arrival.get("direction") or "").strip()
+            operator = arrival.get("operator") or ""
 
             # Fallback chain: API → GTFS → Line number
             if not direction:
@@ -518,14 +513,21 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             # Create arrival entries for each upcoming arrival
             now = dt_util.now()
             line_arrivals = []
-            for minutes in minutes_list:
-                # Calculate arrival time from minutes (timezone-aware)
+            for stop_time in line_times:
+                try:
+                    minutes = int(stop_time["minutes_until"])
+                except (KeyError, TypeError, ValueError):
+                    # Upstream occasionally returns nulls or non-numeric values;
+                    # drop the entry rather than failing the whole update.
+                    continue
+                # Derive the timestamp locally so it is always timezone-aware —
+                # the API reports a naive local time.
                 arrival_time = now + timedelta(minutes=minutes)
                 line_arrivals.append(
                     {
                         "arrival_time": arrival_time.isoformat(),
                         "minutes_until": minutes,
-                        "is_realtime": True,  # Gov API always returns real-time
+                        "is_realtime": bool(stop_time.get("is_realtime")),
                         "direction": direction,
                         "operator": operator,
                     }

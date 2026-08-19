@@ -54,6 +54,41 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements_test.txt
 
+      - name: "manifest requirements match requirements_test.txt"
+        run: |
+          python - <<'EOF'
+          import json, re, sys
+
+          # Dependabot's pip ecosystem only watches requirements*.txt, never
+          # manifest.json, so the runtime pin silently drifts from what CI tests.
+          manifest = json.load(
+              open("custom_components/israel_transportation/manifest.json")
+          )
+          pinned = {}
+          for req in manifest["requirements"]:
+              m = re.match(r"^([A-Za-z0-9_.-]+)==(.+)$", req)
+              if m:
+                  pinned[m.group(1).lower()] = m.group(2)
+
+          tested = {}
+          for line in open("requirements_test.txt"):
+              line = line.split("#")[0].strip()
+              m = re.match(r"^([A-Za-z0-9_.-]+)==(.+)$", line)
+              if m:
+                  tested[m.group(1).lower()] = m.group(2)
+
+          bad = [
+              f"  {name}: manifest pins {ver}, requirements_test.txt has {tested[name]}"
+              for name, ver in pinned.items()
+              if name in tested and tested[name] != ver
+          ]
+          if bad:
+              print("Runtime and test dependency pins disagree:")
+              print("\n".join(bad))
+              sys.exit(1)
+          print(f"OK: {len(pinned)} pinned requirement(s) agree")
+          EOF
+
       - name: "mypy type check"
         run: |
           mypy custom_components/israel_transportation \

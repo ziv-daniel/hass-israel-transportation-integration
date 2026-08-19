@@ -278,16 +278,18 @@ async def test_coordinator_no_data_for_line(
 async def test_gov_api_malformed_minutes_type(
     hass: HomeAssistant, simple_mock_config_entry
 ):
-    """Gov API returns MinutesToArrival as string — must not crash coordinator."""
+    """API returns a non-numeric minutes value — must not crash the coordinator."""
     mock_gov_client = MagicMock()
     mock_gov_client.get_arrivals = AsyncMock(
         return_value=[
             {
-                "Shilut": "249",
-                "MinutesToArrival": "five",  # wrong type
-                "MinutesToArrivalList": ["five", "ten"],
-                "Description": "Tel Aviv",
-                "CompanyName": "Egged",
+                "line": "249",
+                "direction": "Tel Aviv",
+                "operator": "Egged",
+                "route_desc": "10249-1-0",
+                "arrivals": [
+                    {"minutes_until": "five", "is_realtime": False},  # wrong type
+                ],
             }
         ]
     )
@@ -314,16 +316,15 @@ async def test_gov_api_malformed_minutes_type(
 async def test_gov_api_missing_shilut_field(
     hass: HomeAssistant, simple_mock_config_entry
 ):
-    """Gov API returns arrivals without Shilut field — entries must be skipped."""
+    """API returns an entry without a line number — it must be skipped."""
     mock_gov_client = MagicMock()
     mock_gov_client.get_arrivals = AsyncMock(
         return_value=[
             {
-                # Missing "Shilut" key entirely
-                "MinutesToArrival": 5,
-                "MinutesToArrivalList": [5],
-                "Description": "Tel Aviv",
-                "CompanyName": "Egged",
+                # Missing "line" key entirely
+                "direction": "Tel Aviv",
+                "operator": "Egged",
+                "arrivals": [{"minutes_until": 5, "is_realtime": False}],
             }
         ]
     )
@@ -340,7 +341,7 @@ async def test_gov_api_missing_shilut_field(
     )
 
     await coordinator.async_refresh()
-    # Entry without Shilut must be silently skipped, not crash
+    # Entry without a line number must be silently skipped, not crash
     assert coordinator.data == {} or coordinator.get_line_data("249") is None
 
 
@@ -404,11 +405,14 @@ async def test_coordinator_retains_stale_data_after_failed_update(
     mock_gov_client.get_arrivals = AsyncMock(
         return_value=[
             {
-                "Shilut": "249",
-                "MinutesToArrival": 5,
-                "MinutesToArrivalList": [5, 15],
-                "Description": "Tel Aviv",
-                "CompanyName": "Egged",
+                "line": "249",
+                "direction": "Tel Aviv",
+                "operator": "Egged",
+                "route_desc": "10249-1-0",
+                "arrivals": [
+                    {"minutes_until": 5, "is_realtime": True},
+                    {"minutes_until": 15, "is_realtime": False},
+                ],
             }
         ]
     )

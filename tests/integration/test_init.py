@@ -51,10 +51,16 @@ async def test_setup_and_unload(
 
 
 @pytest.mark.asyncio
-async def test_setup_failure_invalid_station(hass: HomeAssistant, mock_config_entry):
-    """Test setup fails gracefully with invalid station."""
+async def test_setup_does_not_validate_station(hass: HomeAssistant, mock_config_entry):
+    """Setup must not gate on a live validation call.
+
+    Validating at setup meant one upstream outage put every configured station
+    into setup_retry with no entities. Validation belongs in the config flow;
+    here, a failing fetch should only make entities unavailable.
+    """
     mock_gov_api_client = MagicMock()
     mock_gov_api_client.validate_station = AsyncMock(return_value=False)
+    mock_gov_api_client.get_arrivals = AsyncMock(return_value=[])
 
     mock_config_entry.add_to_hass(hass)
 
@@ -65,7 +71,8 @@ async def test_setup_failure_invalid_station(hass: HomeAssistant, mock_config_en
         await hass.config_entries.async_setup(mock_config_entry.entry_id)
         await hass.async_block_till_done()
 
-    assert mock_config_entry.state == ConfigEntryState.SETUP_RETRY
+    assert mock_config_entry.state == ConfigEntryState.LOADED
+    mock_gov_api_client.validate_station.assert_not_awaited()
 
 
 @pytest.mark.asyncio

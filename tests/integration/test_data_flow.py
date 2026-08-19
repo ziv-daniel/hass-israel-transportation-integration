@@ -38,22 +38,24 @@ from custom_components.israel_transportation.const import (
 
 GOV_ARRIVALS_TWO_LINES = [
     {
-        "Shilut": "249",
-        "MinutesToArrival": 5,
-        "MinutesToArrivalList": [5, 15],
-        "Description": "Tel Aviv - Jerusalem",
-        "CompanyName": "Egged",
-        "BusstopHebrewName": "Arlozorov Terminal",
-        "ResponseSuccesed": True,
+        "line": "249",
+        "direction": "Tel Aviv - Jerusalem",
+        "operator": "Egged",
+        "route_desc": "10249-1-0",
+        "arrivals": [
+            {"minutes_until": 5, "is_realtime": True},
+            {"minutes_until": 15, "is_realtime": False},
+        ],
     },
     {
-        "Shilut": "40",
-        "MinutesToArrival": 8,
-        "MinutesToArrivalList": [8, 20],
-        "Description": "Tel Aviv - Ramat Gan",
-        "CompanyName": "Dan",
-        "BusstopHebrewName": "Arlozorov Terminal",
-        "ResponseSuccesed": True,
+        "line": "40",
+        "direction": "Tel Aviv - Ramat Gan",
+        "operator": "Dan",
+        "route_desc": "10040-1-0",
+        "arrivals": [
+            {"minutes_until": 8, "is_realtime": False},
+            {"minutes_until": 20, "is_realtime": False},
+        ],
     },
 ]
 
@@ -178,8 +180,13 @@ class TestBusDataFlow:
         assert coordinator.data == {}
         assert coordinator.get_next_arrival("249") is None
 
-    async def test_bus_api_error_raises_update_failed(self, hass: HomeAssistant):
-        """Gov API raises → coordinator first refresh fails → entry in SETUP_RETRY."""
+    async def test_bus_api_error_still_loads_entry(self, hass: HomeAssistant):
+        """An API outage must degrade to unavailable entities, not kill the entry.
+
+        Regression test: the integration used to raise ConfigEntryNotReady when the
+        first fetch failed, which left every configured station in setup_retry with
+        no entities at all whenever the upstream API had a bad day.
+        """
         entry = _make_bus_config_entry()
         entry.add_to_hass(hass)
 
@@ -194,8 +201,11 @@ class TestBusDataFlow:
             await hass.config_entries.async_setup(entry.entry_id)
             await hass.async_block_till_done()
 
-        # First refresh failure causes SETUP_RETRY
-        assert entry.state == ConfigEntryState.SETUP_RETRY
+        assert entry.state == ConfigEntryState.LOADED
+
+        coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+        assert coordinator.last_update_success is False
+        assert coordinator.get_next_arrival("249") is None
 
     async def test_coordinator_uses_gov_api_not_busnearby(self, hass: HomeAssistant):
         """Bus setup creates coordinator with gov_api_client, NOT api_client."""

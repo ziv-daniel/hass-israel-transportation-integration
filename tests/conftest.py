@@ -147,22 +147,24 @@ def mock_gov_api_client():
         client.get_arrivals = AsyncMock(
             return_value=[
                 {
-                    "Shilut": "249",
-                    "MinutesToArrival": 5,
-                    "MinutesToArrivalList": [5, 15],
-                    "Description": "Tel Aviv - Jerusalem",
-                    "CompanyName": "Egged",
-                    "BusstopHebrewName": "Arlozorov Terminal",
-                    "ResponseSuccesed": True,
+                    "line": "249",
+                    "direction": "Tel Aviv - Jerusalem",
+                    "operator": "Egged",
+                    "route_desc": "10249-1-0",
+                    "arrivals": [
+                        {"minutes_until": 5, "is_realtime": True},
+                        {"minutes_until": 15, "is_realtime": False},
+                    ],
                 },
                 {
-                    "Shilut": "40",
-                    "MinutesToArrival": 8,
-                    "MinutesToArrivalList": [8, 20],
-                    "Description": "Tel Aviv - Ramat Gan",
-                    "CompanyName": "Dan",
-                    "BusstopHebrewName": "Arlozorov Terminal",
-                    "ResponseSuccesed": True,
+                    "line": "40",
+                    "direction": "Tel Aviv - Ramat Gan",
+                    "operator": "Dan",
+                    "route_desc": "10040-1-0",
+                    "arrivals": [
+                        {"minutes_until": 8, "is_realtime": False},
+                        {"minutes_until": 20, "is_realtime": False},
+                    ],
                 },
             ]
         )

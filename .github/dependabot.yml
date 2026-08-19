@@ -17,3 +17,10 @@ updates:
     labels:
       - "dependencies"
       - "python"
+    ignore:
+      # pytest and pytest-asyncio are pinned by pytest-homeassistant-custom-component,
+      # which requires an exact pytest. Bumping them independently made
+      # requirements_test.txt unresolvable and broke CI. Upgrade them only together
+      # with a phcc release that supports the newer version.
+      - dependency-name: "pytest"
+      - dependency-name: "pytest-asyncio"
