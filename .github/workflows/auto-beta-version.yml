@@ -72,13 +72,30 @@ jobs:
 
           git push
 
+          # The release must be tagged at the bump commit. actions/create-release
+          # tagged the commit that triggered the workflow, i.e. the commit *before*
+          # the bump, so every beta shipped a manifest with the previous version.
+          echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+        id: commit
+
+      - name: Compress GTFS data for the release
+        run: |
+          gzip -9 -k -f custom_components/israel_transportation/gtfs_data/cities_index.json
+
       - name: Create Pre-release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: v${{ steps.version.outputs.new_version }}
-          release_name: v${{ steps.version.outputs.new_version }} (Beta)
+          # Tag the bump commit, not the commit that triggered the run.
+          target_commitish: ${{ steps.commit.outputs.sha }}
+          name: v${{ steps.version.outputs.new_version }} (Beta)
+          # Attached here rather than by release-assets.yml: releases created with
+          # GITHUB_TOKEN do not trigger other workflows, so that one never fires
+          # for automated betas.
+          files: |
+            custom_components/israel_transportation/gtfs_data/cities_index.json.gz
           body: |
             ## 🧪 Beta Release - Testing Only
 
@@ -90,19 +107,11 @@ jobs:
             - Current: `${{ steps.version.outputs.new_version }}`
             - Previous: `${{ steps.version.outputs.current_version }}`
 
-            ### For Developers
-            This beta version is automatically created for testing purposes.
-            Install via:
-            - Local symlink to Home Assistant
-            - HACS custom repository (private repo)
-
-            ### Stability
-            This version may contain:
-            - 🐛 Unfixed bugs
-            - 🔬 Experimental features
-            - 📝 Incomplete documentation
+            ### What changed
+            See the commits since the previous tag:
+            https://github.com/${{ github.repository }}/compare/v${{ steps.version.outputs.current_version }}...v${{ steps.version.outputs.new_version }}
 
             ---
             🤖 Automated beta release
           draft: false
-          prerelease: true  # Mark as pre-release
+          prerelease: true
