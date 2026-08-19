@@ -24,73 +24,83 @@ from custom_components.israel_transportation.coordinator import (
 )
 
 # ---------------------------------------------------------------------------
-# Mock data matching real bus.gov.il response format
+# Mock data matching the normalized shape GovApiClient.get_arrivals returns
 # ---------------------------------------------------------------------------
+
+
+def _times(*pairs):
+    """Build an arrivals list from (minutes, is_realtime) pairs."""
+    return [
+        {"minutes_until": minutes, "is_realtime": realtime}
+        for minutes, realtime in pairs
+    ]
+
 
 GOV_ARRIVALS_STANDARD = [
     {
-        "Shilut": "249",
-        "MinutesToArrival": 5,
-        "MinutesToArrivalList": [5, 15, 25],
-        "Description": "Tel Aviv - Jerusalem",
-        "CompanyName": "Egged",
-        "BusstopHebrewName": "Arlozorov Terminal",
-        "ResponseSuccesed": True,
+        "line": "249",
+        "direction": "Tel Aviv - Jerusalem",
+        "operator": "Egged",
+        "route_desc": "10249-1-0",
+        "arrivals": _times((5, True), (15, False), (25, False)),
     },
     {
-        "Shilut": "40",
-        "MinutesToArrival": 8,
-        "MinutesToArrivalList": [8, 20],
-        "Description": "Tel Aviv - Ramat Gan",
-        "CompanyName": "Dan",
-        "BusstopHebrewName": "Arlozorov Terminal",
-        "ResponseSuccesed": True,
+        "line": "40",
+        "direction": "Tel Aviv - Ramat Gan",
+        "operator": "Dan",
+        "route_desc": "10040-1-0",
+        "arrivals": _times((8, False), (20, False)),
     },
 ]
 
-GOV_ARRIVALS_NO_LIST = [
+GOV_ARRIVALS_SINGLE = [
     {
-        "Shilut": "5",
-        "MinutesToArrival": 8,
-        "Description": "Sderot - Train Station",
+        "line": "5",
+        "direction": "Sderot - Train Station",
+        "operator": "Dan BaDarom",
+        "route_desc": "96005-1-#",
+        "arrivals": _times((8, False)),
     },
 ]
 
-GOV_ARRIVALS_BAD_SHILUT = [
+GOV_ARRIVALS_BAD_LINE = [
     {
-        "Shilut": "",
-        "MinutesToArrival": 3,
-        "Description": "Should be skipped",
+        "line": "",
+        "direction": "Should be skipped",
+        "operator": "",
+        "arrivals": _times((3, False)),
     },
 ]
 
 GOV_ARRIVALS_NO_DIRECTION = [
     {
-        "Shilut": "7",
-        "MinutesToArrival": 10,
-        "MinutesToArrivalList": [10],
-        "Description": "",
-        "CompanyName": "Kavim",
+        "line": "7",
+        "direction": "",
+        "operator": "Kavim",
+        "route_desc": "10007-1-0",
+        "arrivals": _times((10, False)),
     },
 ]
 
 GOV_ARRIVALS_MANY = [
     {
-        "Shilut": "100",
-        "MinutesToArrival": 2,
-        "MinutesToArrivalList": [2, 12, 22, 32, 42],
-        "Description": "Long Route",
-        "CompanyName": "Egged",
+        "line": "100",
+        "direction": "Long Route",
+        "operator": "Egged",
+        "route_desc": "10100-1-0",
+        "arrivals": _times(
+            (2, False), (12, False), (22, False), (32, False), (42, False)
+        ),
     },
 ]
 
 GOV_ARRIVALS_UNSORTED = [
     {
-        "Shilut": "50",
-        "MinutesToArrival": 20,
-        "MinutesToArrivalList": [20, 5, 35, 10],
-        "Description": "Test Route",
-        "CompanyName": "Dan",
+        "line": "50",
+        "direction": "Test Route",
+        "operator": "Dan",
+        "route_desc": "10050-1-0",
+        "arrivals": _times((20, False), (5, False), (35, False), (10, False)),
     },
 ]
 
@@ -194,7 +204,7 @@ class TestProcessGovArrivals:
             hass, simple_mock_config_entry, mock_gov, bus_lines=["5"]
         )
 
-        result = coordinator._process_gov_arrivals(GOV_ARRIVALS_NO_LIST)
+        result = coordinator._process_gov_arrivals(GOV_ARRIVALS_SINGLE)
 
         assert "5" in result
         assert len(result["5"]) == 1
@@ -207,7 +217,7 @@ class TestProcessGovArrivals:
         mock_gov = MagicMock()
         coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
 
-        result = coordinator._process_gov_arrivals(GOV_ARRIVALS_BAD_SHILUT)
+        result = coordinator._process_gov_arrivals(GOV_ARRIVALS_BAD_LINE)
 
         assert result == {}
 
@@ -269,11 +279,11 @@ class TestProcessGovArrivals:
     async def test_no_minutes_at_all(
         self, hass: HomeAssistant, simple_mock_config_entry
     ):
-        """Entry with neither MinutesToArrivalList nor MinutesToArrival → empty list for line."""
+        """A route present at the stop but with no upcoming times → empty list for line."""
         mock_gov = MagicMock()
         coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
 
-        arrivals = [{"Shilut": "99", "Description": "Ghost bus"}]
+        arrivals = [{"line": "99", "direction": "Ghost bus", "arrivals": []}]
         result = coordinator._process_gov_arrivals(arrivals)
 
         # Line exists in result but has no arrivals (empty minutes_list)
@@ -426,11 +436,11 @@ class TestGovIntervalAdjustment:
         mock_gov.get_arrivals = AsyncMock(
             return_value=[
                 {
-                    "Shilut": "249",
-                    "MinutesToArrival": 5,
-                    "MinutesToArrivalList": [5],
-                    "Description": "Test",
-                    "CompanyName": "Test",
+                    "line": "249",
+                    "direction": "Test",
+                    "operator": "Test",
+                    "route_desc": "10249-1-0",
+                    "arrivals": [{"minutes_until": 5, "is_realtime": True}],
                 },
             ]
         )

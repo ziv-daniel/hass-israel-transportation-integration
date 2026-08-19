@@ -565,3 +565,105 @@ async def test_duplicate_entry_aborted(hass: HomeAssistant):
         result2 = await _complete_bus_flow(result2["flow_id"])
         assert result2["type"] == FRT.ABORT
         assert result2["reason"] == "already_configured"
+
+
+class TestResolveMakat:
+    """Translating a bundled-GTFS station into the MOT API's stop code.
+
+    The GTFS index is keyed by GTFS stop_id while the API addresses stops by
+    stop_code. Both are small integers, so passing a stop_id straight through
+    silently resolves to a real but different station — hence this translation.
+    """
+
+    def _flow(self):
+        from custom_components.israel_transportation.config_flow import (
+            SilentBusConfigFlow,
+        )
+
+        return SilentBusConfigFlow()
+
+    @pytest.mark.asyncio
+    async def test_picks_candidate_at_matching_coordinates(self):
+        """The candidate at the station's coordinates wins, not the first one."""
+        client = AsyncMock()
+        client.search_stations.return_value = [
+            {"makat": "52325", "name": "X", "lat": 32.9220, "lon": 35.0770},
+            {"makat": "52326", "name": "X", "lat": 32.9250, "lon": 35.0790},
+        ]
+        gtfs_station = {"id": "19524", "name": "X", "lat": 32.9250, "lon": 35.0790}
+
+        makat = await self._flow()._resolve_makat(client, gtfs_station)
+
+        assert makat == "52326"
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_nothing_is_close_enough(self):
+        """A same-named stop in another city must not be silently accepted."""
+        client = AsyncMock()
+        client.search_stations.return_value = [
+            {"makat": "36065", "name": "יוספטל", "lat": 32.0154, "lon": 34.7522},
+        ]
+        gtfs_station = {"id": "1", "name": "יוספטל", "lat": 32.8180, "lon": 35.1128}
+
+        assert await self._flow()._resolve_makat(client, gtfs_station) is None
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_no_candidates(self):
+        """An unknown station name resolves to nothing rather than guessing."""
+        client = AsyncMock()
+        client.search_stations.return_value = []
+
+        result = await self._flow()._resolve_makat(
+            client, {"id": "1", "name": "nowhere", "lat": 32.0, "lon": 34.0}
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_unambiguous_match_without_coordinates(self):
+        """Without coordinates, a single result is trusted."""
+        client = AsyncMock()
+        client.search_stations.return_value = [
+            {"makat": "14170", "name": "Y", "lat": None, "lon": None}
+        ]
+
+        result = await self._flow()._resolve_makat(
+            client, {"id": "1", "name": "Y", "lat": None, "lon": None}
+        )
+        assert result == "14170"
+
+    @pytest.mark.asyncio
+    async def test_ambiguous_match_without_coordinates_is_rejected(self):
+        """Without coordinates, several results are ambiguous — pick none."""
+        client = AsyncMock()
+        client.search_stations.return_value = [
+            {"makat": "1", "name": "Y", "lat": None, "lon": None},
+            {"makat": "2", "name": "Y", "lat": None, "lon": None},
+        ]
+
+        result = await self._flow()._resolve_makat(
+            client, {"id": "1", "name": "Y", "lat": None, "lon": None}
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_uses_stop_code_from_index_when_present(self):
+        """Newer GTFS builds carry stop_code — use it and skip the search."""
+        client = AsyncMock()
+        gtfs_station = {"id": "44592", "code": "12665", "name": "X", "lat": 1, "lon": 2}
+
+        makat = await self._flow()._resolve_makat(client, gtfs_station)
+
+        assert makat == "12665"
+        client.search_stations.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_search_on_older_index(self):
+        """Data without stop_code still resolves via name + coordinates."""
+        client = AsyncMock()
+        client.search_stations.return_value = [
+            {"makat": "12665", "name": "X", "lat": 31.5407, "lon": 34.5963}
+        ]
+        gtfs_station = {"id": "44592", "name": "X", "lat": 31.5407, "lon": 34.5963}
+
+        assert await self._flow()._resolve_makat(client, gtfs_station) == "12665"
+        client.search_stations.assert_awaited_once()

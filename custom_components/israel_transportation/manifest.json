@@ -11,7 +11,7 @@
   "issue_tracker": "https://github.com/ziv-daniel/hass-israel-transportation-integration/issues",
   "requirements": [
     "aiohttp>=3.9.0",
-    "israel-rail-api==0.1.4"
+    "israel-rail-api==0.1.5"
   ],
   "version": "1.1.1-beta.3"
 }

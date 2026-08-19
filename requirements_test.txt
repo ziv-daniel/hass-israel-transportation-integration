@@ -1,4 +1,7 @@
-pytest>=9.1.1
+# Pinned by pytest-homeassistant-custom-component, which requires pytest==9.0.0.
+# Do not raise this without checking that phcc supports the newer pytest first —
+# a >=9.1.1 bump made requirements_test.txt unsatisfiable (see dependabot ignore).
+pytest==9.0.0
 pytest-asyncio>=1.3.0
 pytest-cov>=4.1.0
 pytest-homeassistant-custom-component>=0.13.0

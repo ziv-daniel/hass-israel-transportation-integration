@@ -246,6 +246,17 @@ def parse_stops(zip_path: Path) -> Dict[str, Dict]:
                 print(f"Error: Required column not found in stops.txt header: {e}")
                 raise
 
+            # stop_code is the number printed on the stop sign (the "makat"), and
+            # it is what bus.gov.il / api.bus.gov.il address stops by. It is NOT
+            # stop_id, which is an internal GTFS surrogate key — the two are
+            # different numbers for the same stop, in overlapping ranges, so
+            # confusing them silently resolves to a different station.
+            try:
+                stop_code_idx = header.index("stop_code")
+            except ValueError:
+                stop_code_idx = None
+                print("Warning: stops.txt has no stop_code column")
+
             # Parse each stop
             for line_num, line in enumerate(lines[1:], start=2):
                 # Handle CSV properly (quoted fields may contain commas)
@@ -263,6 +274,9 @@ def parse_stops(zip_path: Path) -> Dict[str, Dict]:
                     stop_name = parts[stop_name_idx].strip().strip('"')
                     stop_lat = float(parts[stop_lat_idx].strip())
                     stop_lon = float(parts[stop_lon_idx].strip())
+                    stop_code = ""
+                    if stop_code_idx is not None and len(parts) > stop_code_idx:
+                        stop_code = parts[stop_code_idx].strip().strip('"')
                 except (ValueError, IndexError):
                     # Skip malformed lines
                     skipped_stops += 1
@@ -285,9 +299,15 @@ def parse_stops(zip_path: Path) -> Dict[str, Dict]:
                     }
 
                 # Add station to city
-                cities_index[city]["stations"].append(
-                    {"id": stop_id, "name": stop_name, "lat": stop_lat, "lon": stop_lon}
-                )
+                station = {
+                    "id": stop_id,
+                    "name": stop_name,
+                    "lat": stop_lat,
+                    "lon": stop_lon,
+                }
+                if stop_code:
+                    station["code"] = stop_code
+                cities_index[city]["stations"].append(station)
 
                 total_stops += 1
 

@@ -26,31 +26,35 @@ from custom_components.israel_transportation.const import (
 
 GOV_ARRIVALS_FULL = [
     {
-        "Shilut": "249",
-        "MinutesToArrival": 5,
-        "MinutesToArrivalList": [5, 15, 25],
-        "Description": "Tel Aviv - Jerusalem",
-        "CompanyName": "Egged",
-        "BusstopHebrewName": "Arlozorov Terminal",
-        "ResponseSuccesed": True,
+        "line": "249",
+        "direction": "Tel Aviv - Jerusalem",
+        "operator": "Egged",
+        "route_desc": "10249-1-0",
+        "arrivals": [
+            {"minutes_until": 5, "is_realtime": True},
+            {"minutes_until": 15, "is_realtime": False},
+            {"minutes_until": 25, "is_realtime": False},
+        ],
     },
     {
-        "Shilut": "40",
-        "MinutesToArrival": 8,
-        "MinutesToArrivalList": [8, 20],
-        "Description": "Tel Aviv - Ramat Gan",
-        "CompanyName": "Dan",
-        "BusstopHebrewName": "Arlozorov Terminal",
-        "ResponseSuccesed": True,
+        "line": "40",
+        "direction": "Tel Aviv - Ramat Gan",
+        "operator": "Dan",
+        "route_desc": "10040-1-0",
+        "arrivals": [
+            {"minutes_until": 8, "is_realtime": False},
+            {"minutes_until": 20, "is_realtime": False},
+        ],
     },
     {
-        "Shilut": "605",
-        "MinutesToArrival": 12,
-        "MinutesToArrivalList": [12, 42],
-        "Description": "Tel Aviv - Kfar Saba",
-        "CompanyName": "Kavim",
-        "BusstopHebrewName": "Arlozorov Terminal",
-        "ResponseSuccesed": True,
+        "line": "605",
+        "direction": "Tel Aviv - Kfar Saba",
+        "operator": "Kavim",
+        "route_desc": "10605-1-0",
+        "arrivals": [
+            {"minutes_until": 12, "is_realtime": False},
+            {"minutes_until": 42, "is_realtime": False},
+        ],
     },
 ]
 
@@ -110,8 +114,10 @@ class TestCompleteBusFlow:
         assert line_249[1]["minutes_until"] == 15
         assert line_249[2]["minutes_until"] == 25
 
-        # 6. Gov API was called with correct parameters
-        mock_client.validate_station.assert_awaited_once_with("24068")
+        # 6. Gov API was called with correct parameters.
+        # Note setup deliberately does NOT call validate_station — validation is
+        # the config flow's job, so an API outage cannot block an existing entry.
+        mock_client.validate_station.assert_not_awaited()
         mock_client.get_arrivals.assert_awaited_with(
             "24068", lines=["249", "40", "605"]
         )
@@ -137,11 +143,11 @@ class TestCompleteBusFlow:
         mock_client.get_arrivals = AsyncMock(
             return_value=[
                 {
-                    "Shilut": "249",
-                    "MinutesToArrival": 5,
-                    "MinutesToArrivalList": [5],
-                    "Description": "Tel Aviv",
-                    "CompanyName": "Egged",
+                    "line": "249",
+                    "direction": "Tel Aviv",
+                    "operator": "Egged",
+                    "route_desc": "10249-1-0",
+                    "arrivals": [{"minutes_until": 5, "is_realtime": True}],
                 },
             ]
         )
@@ -172,11 +178,11 @@ class TestCompleteBusFlow:
         mock_client.get_arrivals = AsyncMock(
             return_value=[
                 {
-                    "Shilut": "249",
-                    "MinutesToArrival": 3,
-                    "MinutesToArrivalList": [3],
-                    "Description": "Tel Aviv",
-                    "CompanyName": "Egged",
+                    "line": "249",
+                    "direction": "Tel Aviv",
+                    "operator": "Egged",
+                    "route_desc": "10249-1-0",
+                    "arrivals": [{"minutes_until": 3, "is_realtime": True}],
                 },
             ]
         )

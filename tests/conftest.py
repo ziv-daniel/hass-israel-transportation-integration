@@ -64,20 +64,10 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 
 @pytest.fixture(autouse=True)
 def mock_gtfs_functions():
-    """Mock GTFS filesystem functions to prevent FileNotFoundError in all tests.
-
-    The coordinator constructor calls get_station_display_name() which reads
-    GTFS files from disk. Mock globally so tests don't need actual files.
-    """
-    with (
-        patch(
-            "custom_components.israel_transportation.coordinator.get_station_display_name",
-            return_value="Test Station [24068]",
-        ),
-        patch(
-            "custom_components.israel_transportation.coordinator.get_route_headsign",
-            return_value=None,
-        ),
+    """Stop the direction fallback from reading GTFS files off disk in tests."""
+    with patch(
+        "custom_components.israel_transportation.coordinator.get_route_headsign",
+        return_value=None,
     ):
         yield
 
@@ -147,22 +137,24 @@ def mock_gov_api_client():
         client.get_arrivals = AsyncMock(
             return_value=[
                 {
-                    "Shilut": "249",
-                    "MinutesToArrival": 5,
-                    "MinutesToArrivalList": [5, 15],
-                    "Description": "Tel Aviv - Jerusalem",
-                    "CompanyName": "Egged",
-                    "BusstopHebrewName": "Arlozorov Terminal",
-                    "ResponseSuccesed": True,
+                    "line": "249",
+                    "direction": "Tel Aviv - Jerusalem",
+                    "operator": "Egged",
+                    "route_desc": "10249-1-0",
+                    "arrivals": [
+                        {"minutes_until": 5, "is_realtime": True},
+                        {"minutes_until": 15, "is_realtime": False},
+                    ],
                 },
                 {
-                    "Shilut": "40",
-                    "MinutesToArrival": 8,
-                    "MinutesToArrivalList": [8, 20],
-                    "Description": "Tel Aviv - Ramat Gan",
-                    "CompanyName": "Dan",
-                    "BusstopHebrewName": "Arlozorov Terminal",
-                    "ResponseSuccesed": True,
+                    "line": "40",
+                    "direction": "Tel Aviv - Ramat Gan",
+                    "operator": "Dan",
+                    "route_desc": "10040-1-0",
+                    "arrivals": [
+                        {"minutes_until": 8, "is_realtime": False},
+                        {"minutes_until": 20, "is_realtime": False},
+                    ],
                 },
             ]
         )

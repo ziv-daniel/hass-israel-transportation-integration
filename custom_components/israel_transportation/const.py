@@ -48,9 +48,24 @@ API_BASE_URL: Final = "https://api.busnearby.co.il"
 API_SEARCH_URL: Final = "https://app.busnearby.co.il/stopSearch"
 API_TIMEOUT: Final = 10
 
-# bus.gov.il API configuration (for buses and light rail)
-GOV_API_BASE_URL: Final = "https://bus.gov.il/WebApi/api/passengerinfo"
+# Israel MOT API configuration (for buses and light rail).
+#
+# The old bus.gov.il/WebApi/api/passengerinfo endpoints were removed when the
+# portal was rebuilt — they now serve the site's SPA shell as HTML. These are the
+# services the current MOT route planner (route.bus.gov.il) calls. Anonymous, no
+# API key. URLs are built as {base}/{locale}/{Controller/Action}.
+MOT_API_BASE_URL: Final = "https://api.bus.gov.il/prod/mot-scheduler-prod/api"
+MOT_PLANNER_BASE_URL: Final = "https://api.bus.gov.il/prod/route-planner-prod/api"
+MOT_API_LOCALE: Final = "he"
 GOV_API_TIMEOUT: Final = 15
+
+# Which routes serve a stop is reference data; cache it rather than re-fetching
+# it on every arrivals poll (seconds).
+MOT_ROUTES_CACHE_TTL: Final = 3600
+
+# Arrival times cost one request per route, so bound the work per poll.
+MOT_MAX_CONCURRENT_REQUESTS: Final = 5
+MOT_MAX_ROUTES_PER_POLL: Final = 12
 MAX_RETRIES: Final = 3
 RETRY_DELAY: Final = 2
 

@@ -119,12 +119,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             # Create gov API client
             gov_api_client = GovApiClient(session)
 
-            # Validate station with gov API
-            is_valid = await gov_api_client.validate_station(station_id)
-            if not is_valid:
-                raise ConfigEntryNotReady(
-                    f"Station {station_id} is not accessible. Please check your configuration."
-                )
+            # Deliberately no station validation here. Validation belongs in the
+            # config flow, where the user is entering the station. Doing it at
+            # setup meant a single upstream outage left already-configured,
+            # previously-working entries permanently in setup_retry with no
+            # entities at all. Let the coordinator's first refresh decide: a
+            # failed fetch surfaces as unavailable entities on a loaded entry.
 
             # Create coordinator for bus/light rail with gov API
             coordinator = SilentBusCoordinator(
@@ -142,8 +142,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     except ApiConnectionError as err:
         raise ConfigEntryNotReady(f"Failed to connect to BusNearby API: {err}") from err
 
-    # Fetch initial data
-    await coordinator.async_config_entry_first_refresh()
+    # Fetch initial data.
+    #
+    # Deliberately async_refresh() and not async_config_entry_first_refresh():
+    # the latter raises ConfigEntryNotReady when the first fetch fails, which
+    # leaves the entry in setup_retry with no entities at all. An upstream API
+    # outage should degrade to unavailable entities on a loaded entry, so the
+    # integration stays usable and recovers on its own once upstream returns.
+    await coordinator.async_refresh()
+    if not coordinator.last_update_success:
+        _LOGGER.warning(
+            "Initial data fetch failed for %s; entities will report unavailable "
+            "until the next successful update",
+            entry.title,
+        )
 
     # Store coordinator
     hass.data.setdefault(DOMAIN, {})

@@ -26,7 +26,6 @@ from .const import (
     TRANSPORT_TYPE_BUS,
     TRANSPORT_TYPE_TRAIN,
 )
-from .gtfs_loader import get_station_display_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,9 +88,15 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         self.from_station_name = from_station_name
         self.to_station_name = to_station_name
 
-        # Generate display name for logging (includes city, station name, and ID)
+        # Display label for logging. Built from the config entry rather than
+        # looked up in the GTFS index: that lookup read a ~5MB JSON file
+        # synchronously on the event loop (HA flags it as a blocking call), and
+        # it keyed on GTFS stop_id while station_id here is a stop_code, so it
+        # rarely matched anyway.
         if station_id:
-            self._station_display = get_station_display_name(station_id)
+            self._station_display = (
+                f"{station_name} [{station_id}]" if station_name else str(station_id)
+            )
         else:
             self._station_display = None
 
@@ -472,19 +477,14 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         processed: dict[str, list[dict[str, Any]]] = {}
 
         for arrival in arrivals:
-            line_number = arrival.get("Shilut")
+            line_number = arrival.get("line")
             if not line_number:
                 continue
 
-            minutes_list = arrival.get("MinutesToArrivalList", [])
-            if not minutes_list:
-                # Fallback to single value
-                single_min = arrival.get("MinutesToArrival")
-                if single_min is not None:
-                    minutes_list = [single_min]
+            line_times = arrival.get("arrivals") or []
 
-            direction = arrival.get("Description", "").strip()
-            operator = arrival.get("CompanyName", "")
+            direction = (arrival.get("direction") or "").strip()
+            operator = arrival.get("operator") or ""
 
             # Fallback chain: API → GTFS → Line number
             if not direction:
@@ -518,14 +518,21 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             # Create arrival entries for each upcoming arrival
             now = dt_util.now()
             line_arrivals = []
-            for minutes in minutes_list:
-                # Calculate arrival time from minutes (timezone-aware)
+            for stop_time in line_times:
+                try:
+                    minutes = int(stop_time["minutes_until"])
+                except (KeyError, TypeError, ValueError):
+                    # Upstream occasionally returns nulls or non-numeric values;
+                    # drop the entry rather than failing the whole update.
+                    continue
+                # Derive the timestamp locally so it is always timezone-aware —
+                # the API reports a naive local time.
                 arrival_time = now + timedelta(minutes=minutes)
                 line_arrivals.append(
                     {
                         "arrival_time": arrival_time.isoformat(),
                         "minutes_until": minutes,
-                        "is_realtime": True,  # Gov API always returns real-time
+                        "is_realtime": bool(stop_time.get("is_realtime")),
                         "direction": direction,
                         "operator": operator,
                     }
