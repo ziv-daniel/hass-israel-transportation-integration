@@ -286,7 +286,7 @@ def get_route_headsign(station_id: str, route_number: str) -> Optional[str]:
     return None
 
 
-async def async_load_cities_index() -> Dict:
+async def async_load_cities_index(hass=None) -> Dict:
     """Load the cities index asynchronously (non-blocking).
 
     This runs the file I/O in a thread pool to avoid blocking the event loop.
@@ -324,9 +324,17 @@ async def async_load_cities_index() -> Dict:
             )
         _LOGGER.info("GTFS data downloaded successfully.")
     elif await asyncio.to_thread(_gtfs_is_stale):
-        # Data exists but is >7 days old — refresh in background, serve stale for now
+        # Data exists but is >7 days old — refresh in background, serve stale for now.
+        # Hand the task to HA so it is tracked and cancelled cleanly on shutdown
+        # rather than being an unowned fire-and-forget that can be killed mid-write.
         _LOGGER.info("GTFS data is stale (>7 days). Refreshing in background...")
-        asyncio.ensure_future(download_gtfs_data_from_release())
+        if hass is not None:
+            hass.async_create_background_task(
+                download_gtfs_data_from_release(),
+                "israel_transportation_gtfs_refresh",
+            )
+        else:
+            _LOGGER.debug("No hass reference; skipping background GTFS refresh")
 
     # Run the blocking I/O in a thread pool
     return await asyncio.to_thread(load_cities_index)

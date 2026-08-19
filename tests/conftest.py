@@ -64,10 +64,27 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 
 @pytest.fixture(autouse=True)
 def mock_gtfs_functions():
-    """Stop the direction fallback from reading GTFS files off disk in tests."""
-    with patch(
-        "custom_components.israel_transportation.coordinator.get_route_headsign",
-        return_value=None,
+    """Keep GTFS out of tests: no disk reads for the fallback, no network.
+
+    The bundled index is older than the staleness threshold, so without this the
+    config flow kicks off a real download from the gtfs-data-latest release and
+    the HA test harness fails the test for opening a socket.
+    """
+    with (
+        patch(
+            "custom_components.israel_transportation.coordinator.get_route_headsign",
+            return_value=None,
+        ),
+        patch(
+            "custom_components.israel_transportation.gtfs_loader._gtfs_is_stale",
+            return_value=False,
+        ),
+        patch(
+            "custom_components.israel_transportation.gtfs_loader."
+            "download_gtfs_data_from_release",
+            new_callable=AsyncMock,
+            return_value=True,
+        ),
     ):
         yield
 
