@@ -64,20 +64,10 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 
 @pytest.fixture(autouse=True)
 def mock_gtfs_functions():
-    """Mock GTFS filesystem functions to prevent FileNotFoundError in all tests.
-
-    The coordinator constructor calls get_station_display_name() which reads
-    GTFS files from disk. Mock globally so tests don't need actual files.
-    """
-    with (
-        patch(
-            "custom_components.israel_transportation.coordinator.get_station_display_name",
-            return_value="Test Station [24068]",
-        ),
-        patch(
-            "custom_components.israel_transportation.coordinator.get_route_headsign",
-            return_value=None,
-        ),
+    """Stop the direction fallback from reading GTFS files off disk in tests."""
+    with patch(
+        "custom_components.israel_transportation.coordinator.get_route_headsign",
+        return_value=None,
     ):
         yield
 

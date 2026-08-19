@@ -26,7 +26,6 @@ from .const import (
     TRANSPORT_TYPE_BUS,
     TRANSPORT_TYPE_TRAIN,
 )
-from .gtfs_loader import get_station_display_name
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -89,9 +88,15 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         self.from_station_name = from_station_name
         self.to_station_name = to_station_name
 
-        # Generate display name for logging (includes city, station name, and ID)
+        # Display label for logging. Built from the config entry rather than
+        # looked up in the GTFS index: that lookup read a ~5MB JSON file
+        # synchronously on the event loop (HA flags it as a blocking call), and
+        # it keyed on GTFS stop_id while station_id here is a stop_code, so it
+        # rarely matched anyway.
         if station_id:
-            self._station_display = get_station_display_name(station_id)
+            self._station_display = (
+                f"{station_name} [{station_id}]" if station_name else str(station_id)
+            )
         else:
             self._station_display = None
 
