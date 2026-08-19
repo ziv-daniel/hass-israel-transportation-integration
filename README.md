@@ -1,4 +1,4 @@
-# Israel Transportation - Home Assistant Integration
+# Israel Transportation — Home Assistant Integration
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
 [![GitHub Release](https://img.shields.io/github/release/ziv-daniel/hass-israel-transportation-integration.svg?style=for-the-badge&color=blue)](https://github.com/ziv-daniel/hass-israel-transportation-integration/releases)
@@ -8,155 +8,161 @@
 [![HACS](https://img.shields.io/github/actions/workflow/status/ziv-daniel/hass-israel-transportation-integration/hacs.yaml?branch=main&label=HACS&style=flat-square)](https://github.com/ziv-daniel/hass-israel-transportation-integration/actions/workflows/hacs.yaml)
 [![Tests](https://img.shields.io/github/actions/workflow/status/ziv-daniel/hass-israel-transportation-integration/test.yaml?branch=main&label=tests&style=flat-square)](https://github.com/ziv-daniel/hass-israel-transportation-integration/actions/workflows/test.yaml)
 
-A comprehensive Home Assistant integration for monitoring Israeli public transportation in real-time. Track buses, trains, and light rail with live arrival times and get notified when your ride is approaching.
+Track Israeli buses, trains and light rail in Home Assistant. Each tracked line becomes a sensor whose state is the number of minutes until the next arrival, with the following departures, direction and operator as attributes — ready for dashboards and automations.
 
 ## Features
 
-- 🚌 **Real-time Bus Tracking** - Get live arrival times for Israeli buses
-- 🚆 **Train Route Support** - Monitor train departures between stations
-- 🚊 **Light Rail (Kala) Support** - Track Jerusalem and Tel Aviv light rail
-- 🎯 **Multi-Station Support** - Monitor multiple stations and routes simultaneously
-- 🔄 **Automatic Updates** - Smart polling with dynamic update intervals
-- 🌍 **Bilingual** - Full support for Hebrew and English
-- 📊 **Rich Sensor Data** - Detailed attributes including direction, real-time status, and upcoming arrivals
-- ⚙️ **Easy Configuration** - User-friendly UI configuration flow for all transport types
-- 🔔 **Automation Ready** - Perfect for creating arrival notifications and automations
-- 🛠️ **Custom Services** - Force refresh and dynamically update tracked lines
-- 📈 **Long-term Statistics** - Sensor data compatible with Home Assistant history and statistics
-- ⚡ **Device Class Support** - Proper duration device class for time-based sensors
+- 🚌 **Buses and 🚊 light rail** — departures for any stop, filtered to the lines you care about
+- 🚆 **Trains** — next departure for a route, with platform, train number and journey time
+- 🎯 **Multiple stations** — add as many stops and routes as you like
+- 🔄 **Adaptive polling** — checks more often when a bus is close, backs off overnight
+- 🌍 **Hebrew and English** — station and direction names come through in Hebrew
+- 📊 **Rich attributes** — `upcoming_arrivals`, `direction`, `real_time`, `operator`
+- ⚙️ **UI setup** — browse stops by city, or type a stop code directly
+- 🛠️ **Services** — force a refresh, or change tracked lines without re-adding the entry
+
+## Requirements
+
+- Home Assistant **2025.11.0** or newer
+- Outbound internet access to `api.bus.gov.il` (bus, light rail) and `rail.co.il` (trains)
+
+No API key, account or registration is needed for either service.
 
 ## Installation
 
-### HACS (Recommended)
+### HACS
 
-1. Open HACS in your Home Assistant instance
-2. Click on "Integrations"
-3. Click the three dots in the top right corner
-4. Select "Custom repositories"
-5. Add this repository URL: `https://github.com/ziv-daniel/hass-israel-transportation-integration`
-6. Select category: "Integration"
-7. Click "Add"
-8. Find "Israel Transportation" in the integrations list
-9. Click "Download"
-10. Restart Home Assistant
+If the repository is not in your HACS yet:
 
-### Manual Installation
+1. HACS → ⋮ (top right) → **Custom repositories**
+2. URL: `https://github.com/ziv-daniel/hass-israel-transportation-integration`
+3. Category: **Integration** → **Add**
 
-1. Download the latest release from the [releases page](https://github.com/ziv-daniel/hass-israel-transportation-integration/releases)
-2. Extract the `custom_components/israel_transportation` folder
-3. Copy it to your Home Assistant `custom_components` directory
-4. Restart Home Assistant
+Then:
+
+1. HACS → search for **Israel Transportation** → open it
+2. **Download**, pick the version, and **Restart Home Assistant**
+
+#### Installing a beta
+
+Beta builds are published as pre-releases. In the download dialog, turn on
+**Show beta versions** — betas are hidden without it — then pick the
+`x.y.z-beta.n` build.
+
+### Manual
+
+```bash
+cd /config/custom_components
+curl -sL https://github.com/ziv-daniel/hass-israel-transportation-integration/archive/refs/tags/vX.Y.Z.tar.gz | tar -xz
+mv hass-israel-transportation-integration-X.Y.Z/custom_components/israel_transportation .
+rm -rf hass-israel-transportation-integration-X.Y.Z
+```
+
+Restart Home Assistant afterwards.
 
 ## Configuration
 
-### Adding the Integration
+### Adding a station or route
 
-1. Go to **Settings** → **Devices & Services**
-2. Click **Add Integration**
-3. Search for **Israel Transportation**
-4. Follow the configuration steps:
-   - **Step 1**: Select transport type (Bus, Train, or Light Rail)
-   - **For Buses/Light Rail**:
-     - **Step 2**: Enter station number (e.g., `24068`)
-     - **Step 3**: Enter line numbers separated by commas (e.g., `249, 40, 605`)
-   - **For Trains**:
-     - **Step 2**: Enter origin station (e.g., `3600` for Tel Aviv Center)
-     - **Step 2**: Enter destination station (e.g., `2800` for Haifa Center)
+**Settings** → **Devices & Services** → **Add Integration** → **Israel Transportation**.
 
-### Finding Station Numbers
+1. **Transport type** — Bus, Train or Light Rail.
+2. **How to find the station**:
+   - *Browse stations by city* — pick a city, then a stop from the list. Recommended; you don't need to know any numbers.
+   - *Enter station ID manually* — type the stop code if you already know it.
+3. **Bus / light rail**: enter the line numbers to track, comma separated (e.g. `249, 40, 605`). Only these lines get sensors.
+   **Trains**: pick the origin and destination stations from the dropdowns.
 
-#### Buses and Light Rail
-- [bus.co.il](https://www.bus.co.il) - Official Israeli bus information site
-- [BusNearby](https://app.busnearby.co.il) - Real-time bus tracking app
+Repeat to add more stops or routes — each becomes its own entry.
 
-#### Trains
-- [rail.co.il](https://www.rail.co.il) - Israel Railways official site
+### Finding a stop code
 
-Common train station IDs:
-- Tel Aviv - Savidor Center: `3600`
-- Tel Aviv - HaShalom: `3700`
-- Jerusalem - Yitzhak Navon: `680`
-- Haifa Center - HaShmona: `2800`
-- Beer Sheva Center: `5800`
-- Ben Gurion Airport: `8600`
+The **stop code** (מק"ט) is the number printed on the physical stop sign, and
+it is what this integration expects. You can find it on the
+[MOT route planner](https://route.bus.gov.il) by searching for the stop, or
+simply use *Browse stations by city* during setup and skip the lookup entirely.
 
-### Configuration Options
+> **Note** — a stop code is not the same as a GTFS `stop_id`. They are both
+> short numbers in overlapping ranges, so it is easy to mistake one for the
+> other, and a `stop_id` used as a stop code will silently resolve to a
+> completely different station. If a stop resolves to an unexpected name,
+> this is usually why.
 
-After setup, you can modify settings by clicking **Configure** on the integration:
+Train stations are chosen from a built-in dropdown, so no lookup is needed.
 
-- **Bus Lines**: Comma-separated list of bus line numbers to track
-- **Update Interval**: How often to fetch data (15-600 seconds, default: 30)
-- **Maximum Arrivals**: Number of upcoming arrivals to track per line (1-10, default: 3)
+### Options
+
+Click **Configure** on an entry to change:
+
+| Option | Range | Default |
+|---|---|---|
+| Bus lines | comma-separated | — |
+| Update interval | 15–600 s | 30 s |
+| Maximum arrivals | 1–10 | 3 |
+
+Tracking fewer lines is meaningfully cheaper: departure times are fetched
+per route, so a stop with many lines and no filter costs many requests per poll.
 
 ## Sensors
 
-### Bus and Light Rail Sensors
+### Bus and light rail
 
-The integration creates one sensor per line:
+One sensor per tracked line: `sensor.bus_station_{station}_line_{line}`
+(light rail uses `light_rail_station_…`).
 
-**Entity ID**: `sensor.{type}_station_{station_name}_line_{line_number}`
+**State** — minutes until the next arrival, e.g. `7`. The state is `unknown`
+when no upcoming departures are known (outside service hours, or the line does
+not currently serve the stop), and `unavailable` when the last update failed.
 
-**Example**:
-- Bus: `sensor.bus_station_azrieli_center_line_249`
-- Light Rail: `sensor.light_rail_station_central_station_line_1`
-
-#### Sensor State
-
-Shows minutes until the next arrival:
-- `5` - Arriving in 5 minutes
-- `Arrived` - Currently at the station
-- `No data` - No upcoming arrivals
-- `Unavailable` - API connection error
-
-#### Bus/Light Rail Sensor Attributes
+**Attributes**
 
 ```yaml
 line_number: "249"
 station_id: "24068"
-station_name: "Azrieli Center"
-next_arrival: "2025-12-25T14:35:00+02:00"
-real_time: true
-direction: "Tel Aviv - Jerusalem"
+station_name: "ת. רכבת תל אביב - סבידור/דרך נמיר"
+direction: "כפר סבא_תחנה מרכזית"
+real_time: false
+next_arrival: "2026-08-19T21:12:00+03:00"
+last_update: "2026-08-19T21:00:24+03:00"
 upcoming_arrivals:
-  - arrival_time: "2025-12-25T14:35:00+02:00"
-    minutes_until: 5
-    is_realtime: true
-    direction: "Tel Aviv - Jerusalem"
+  - arrival_time: "2026-08-19T21:12:00+03:00"
+    minutes_until: 12
+    is_realtime: false
+    direction: "כפר סבא_תחנה מרכזית"
+    operator: "מטרופולין"
 ```
 
-### Train Sensors
+`real_time` reflects what the MOT API reports for that departure. Much of the
+data is timetable-based, so `false` is common and simply means the time is
+scheduled rather than live-tracked.
 
-One sensor per route:
+### Trains
 
-**Entity ID**: `sensor.train_route_{from}_{to}_next_train`
+One sensor per route: `sensor.train_route_{from}_{to}_next_train`
 
-**Example**: `sensor.train_route_tel_aviv_center_haifa_center_next_train`
+**State** — minutes until the next departure, or `unknown` when no departures
+are known and `unavailable` after a failed update.
 
-#### Train Sensor State
-
-Shows minutes until next departure:
-- `15` - Departing in 15 minutes
-- `Departing` - Train is departing now
-- `No data` - No upcoming trains
-
-#### Train Sensor Attributes
+**Attributes**
 
 ```yaml
 from_station: "3600"
-to_station: "2800"
-from_station_name: "Tel Aviv - Savidor Center"
-to_station_name: "Haifa Center - HaShmona"
-next_arrival: "2025-12-25T14:45:00+02:00"
-duration_minutes: 65
-real_time: true
-direction: "Haifa Center - HaShmona"
+to_station: "7320"
+from_station_name: "Tel Aviv-University"
+to_station_name: "Be'er Sheva-Center"
+direction: "Be'er Sheva-Center"
+duration_minutes: 105
+real_time: false
+next_arrival: "2026-08-19T21:05:00+03:00"
 upcoming_arrivals:
-  - arrival_time: "2025-12-25T14:45:00+02:00"
-    minutes_until: 15
-    duration_minutes: 65
-    is_realtime: true
+  - arrival_time: "2026-08-19T21:05:00+03:00"
+    minutes_until: 164
+    duration_minutes: 105
+    is_realtime: false
+    direction: "Be'er Sheva-Center"
+    platform: 2
+    train_number: "43"
 ```
-
 ## Usage Examples
 
 ### Dashboard Card
@@ -257,11 +263,11 @@ template:
             states('sensor.bus_station_azrieli_center_line_40'),
             states('sensor.bus_station_azrieli_center_line_605')
           ] %}
-          {% set times = lines | reject('in', ['No data', 'Arrived', 'unavailable']) | map('int') | list %}
+          {% set times = lines | reject('in', ['unknown', 'unavailable']) | map('int') | list %}
           {% if times | length > 0 %}
             {{ times | min }}
           {% else %}
-            No data
+            unknown
           {% endif %}
         unit_of_measurement: "min"
         icon: mdi:bus-clock
@@ -348,172 +354,165 @@ For more examples including train and light rail configurations, see [examples/c
 
 ## Services
 
-The integration provides custom services for advanced automation scenarios:
-
 ### `israel_transportation.refresh_data`
 
-Force an immediate refresh of arrival times data. Useful when you want the latest information before making a decision.
+Force an immediate refresh, for when you want current times before deciding something.
 
-**Parameters:**
-- `entity_id` (optional): Specific entity to refresh. If not provided, all Israel Transportation entities will be refreshed.
+| Parameter | Required | Meaning |
+|---|---|---|
+| `entity_id` | no | Entity to refresh; omit to refresh every entity |
 
-**Example:**
 ```yaml
-service: israel_transportation.refresh_data
+action: israel_transportation.refresh_data
 data:
   entity_id: sensor.bus_station_azrieli_center_line_249
 ```
 
 ### `israel_transportation.update_lines`
 
-Dynamically update the bus lines being tracked for a station. Perfect for adjusting monitored routes based on time of day or other conditions. Only works for bus and light rail sensors, not trains.
+Change which lines a stop tracks, without removing and re-adding the entry.
+Bus and light rail only.
 
-**Parameters:**
-- `entity_id` (required): The Israel Transportation entity to update
-- `lines` (required): Comma-separated list of bus line numbers
+| Parameter | Required | Meaning |
+|---|---|---|
+| `entity_id` | yes | Entity to update |
+| `lines` | yes | Comma-separated line numbers |
 
-**Example:**
 ```yaml
-service: israel_transportation.update_lines
+action: israel_transportation.update_lines
 data:
   entity_id: sensor.bus_station_azrieli_center_line_249
   lines: "249, 40, 605"
 ```
 
-## Smart Features
+## Behaviour
 
-### Dynamic Update Intervals
+### Polling
 
-The integration automatically adjusts update frequency based on context:
+The update interval adapts to how soon your ride arrives:
 
-- **Bus approaching** (<10 min): Updates every 15 seconds
-- **Normal hours** (6:00-22:00): Updates every 30 seconds (default)
-- **Night hours** (22:00-6:00): Updates every 5 minutes
-- **No upcoming buses** (>60 min): Updates every 5 minutes
+| Situation | Interval |
+|---|---|
+| Next arrival under 10 min | 15 s |
+| Normal hours (06:00–22:00) | 30 s (configurable) |
+| Night (22:00–06:00) | 5 min |
+| Nothing due for over an hour | 5 min |
 
-This optimizes API usage while ensuring timely updates when you need them most.
+### When the upstream API is unavailable
 
-### Error Handling
+Entries stay **loaded** and their sensors report `unavailable`; they recover on
+their own once the API responds again. Setup deliberately does not verify the
+station against the live API, so an upstream outage cannot leave a
+previously-working station permanently unconfigurable.
 
-The integration includes robust error handling:
+Failures are logged with enough detail to tell apart a network problem, a rate
+limit, and an endpoint that has changed shape upstream.
 
-- **Automatic retries** with exponential backoff for network errors
-- **Graceful degradation** when API is unavailable
-- **Clear error messages** in the UI
-- **Sensor availability tracking** - sensors marked unavailable during errors
+## Data sources
 
-## Data Source
+| Transport | Source |
+|---|---|
+| Bus, light rail | `api.bus.gov.il` — the API behind the Ministry of Transport's own [route planner](https://route.bus.gov.il) |
+| Trains | Israel Railways, via the [`israel-rail-api`](https://pypi.org/project/israel-rail-api/) package |
+| Station lists | MOT GTFS feed, rebuilt every 3 days and shipped as a release asset |
 
-This integration uses the [BusNearby API](https://app.busnearby.co.il), which provides real-time Israeli public transportation data. The API does not require authentication and is free to use.
+Neither API requires authentication.
 
 ## Troubleshooting
 
-### Sensors Not Updating
+Enable debug logging to see exactly what the integration is doing:
 
-1. Check your internet connection
-2. Verify the station ID is correct
-3. Ensure the bus lines serve that station
-4. Check Home Assistant logs for errors: `Configuration` → `Logs`
+```yaml
+# configuration.yaml
+logger:
+  default: warning
+  logs:
+    custom_components.israel_transportation: debug
+```
 
-### Station Not Found During Setup
+**A sensor is `unknown`** — no upcoming departures are known for that line right
+now. Check the line actually serves that stop, and that it runs at this hour;
+many lines stop in the evening and Shabbat timetables differ. The log names the
+lines the stop does serve when your filter matches nothing.
 
-- Double-check the station number at [bus.co.il](https://www.bus.co.il)
-- Try entering the station number without any prefix
-- Some stations may not be available in the API
+**A sensor is `unavailable`** — the last update failed. The log will say why.
 
-### No Data for Specific Line
+**The station resolves to the wrong name** — you have probably entered a GTFS
+`stop_id` rather than the stop code from the sign. See
+[Finding a stop code](#finding-a-stop-code).
 
-- Verify the line number is correct
-- Check if the line serves this station
-- The line may not be operating at the current time
+**Setup fails with "cannot connect"** — the MOT API was unreachable or returned
+something unexpected. The log records the response content type and the first
+bytes of the body, which distinguishes an outage from an endpoint that has moved.
+
+**No icon in Settings → Devices & Services** — brand images for custom
+integrations come from [home-assistant/brands](https://github.com/home-assistant/brands),
+not from this repository, so this needs a PR there rather than a release here.
 
 ## Development
 
-### Setting Up Development Environment
-
 ```bash
-# Clone the repository
 git clone https://github.com/ziv-daniel/hass-israel-transportation-integration.git
 cd hass-israel-transportation-integration
-
-# Install development dependencies
 pip install -r requirements_test.txt
-
-# Install pre-commit hooks
-pip install pre-commit
 pre-commit install
 ```
 
-### Running Tests
+**Python 3.14 is required** for the test suite —
+`pytest-homeassistant-custom-component` requires it from 0.13.317 onward.
 
 ```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=custom_components.israel_transportation --cov-report=html
-
-# Run specific test file
-pytest tests/unit/test_api.py
-
-# Run pre-commit checks manually
+pytest tests/ --cov=custom_components.israel_transportation --cov-fail-under=70
 pre-commit run --all-files
+mypy custom_components/israel_transportation --ignore-missing-imports
+bandit -r custom_components/israel_transportation -ll --exclude custom_components/israel_transportation/gtfs_data
 ```
 
-### CI/CD Pipeline
+`pytest`, `pytest-asyncio` and `pytest-cov` are intentionally left unpinned in
+`requirements_test.txt`: `pytest-homeassistant-custom-component` pins them
+exactly, and adding our own floors has twice made the file unresolvable. They
+are on Dependabot's ignore list for the same reason.
 
-This integration uses GitHub Actions for automated testing and validation:
+Tests must not reach the network — the shared fixtures stub the GTFS download,
+and the Home Assistant test harness fails any test that opens a socket.
 
-- **Hassfest**: Validates integration structure and Home Assistant compatibility
-- **HACS Validation**: Ensures HACS repository standards compliance
-- **Tests**: Runs pytest across Python 3.12/3.13 and multiple HA versions
-- **Pre-commit**: Automated code formatting and linting with Ruff
-- **Release Drafter**: Automatically generates release notes from PRs
-- **Dependabot**: Keeps dependencies and actions up to date
+### CI
 
-All workflows run automatically on push and pull requests.
-
-### Code Quality
-
-This project uses:
-- **Ruff** for fast Python linting and formatting
-- **pytest** with coverage reporting via Codecov
-- **Pre-commit hooks** for automated code quality checks
+| Workflow | Purpose |
+|---|---|
+| Tests | pytest on Python 3.14, 70% coverage floor |
+| Quality checks | mypy and bandit |
+| Pre-commit | Ruff lint and format, codespell |
+| Hassfest / HACS | Home Assistant and HACS structure validation |
+| Auto Beta Version | Bumps the version and publishes a pre-release on every merge to `main` |
+| Update GTFS Data | Rebuilds the station index every 3 days |
 
 ### Contributing
 
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes and ensure tests pass
-4. Run pre-commit checks: `pre-commit run --all-files`
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
-
-All PRs are automatically validated by CI/CD workflows.
+1. Fork and branch (`git checkout -b fix/thing`)
+2. Make the change, with a test that fails without it
+3. `pre-commit run --all-files` and `pytest tests/`
+4. Open a pull request
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).
 
 ## Credits
 
-- Integration developed by [@ziv-daniel](https://github.com/ziv-daniel)
-- Data provided by [BusNearby](https://app.busnearby.co.il)
+- Integration by [@ziv-daniel](https://github.com/ziv-daniel)
+- Bus and light rail data from the Israeli Ministry of Transport
+- Train data via [`israel-rail-api`](https://pypi.org/project/israel-rail-api/)
 - Inspired by the original [silent-bus](https://github.com/silentbil/silent-bus) Lovelace card
 
 ## Support
 
-- 🐛 **Report bugs**: [GitHub Issues](https://github.com/ziv-daniel/hass-israel-transportation-integration/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/ziv-daniel/hass-israel-transportation-integration/discussions)
-- 📖 **Documentation**: [Integration Plan](INTEGRATION_PLAN.md)
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for release history.
+- 🐛 [Report a bug](https://github.com/ziv-daniel/hass-israel-transportation-integration/issues)
+- 💬 [Discussions](https://github.com/ziv-daniel/hass-israel-transportation-integration/discussions)
+- 📝 [Changelog](CHANGELOG.md)
 
 ---
 
-**Disclaimer**: This is an unofficial integration and is not affiliated with or endorsed by the Israeli Ministry of Transportation or BusNearby.
+**Disclaimer** — unofficial integration, not affiliated with or endorsed by the
+Israeli Ministry of Transport or Israel Railways. It reads the same public
+endpoints their own website uses; those may change without notice.
