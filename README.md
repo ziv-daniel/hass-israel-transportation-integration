@@ -445,9 +445,9 @@ lines the stop does serve when your filter matches nothing.
 something unexpected. The log records the response content type and the first
 bytes of the body, which distinguishes an outage from an endpoint that has moved.
 
-**No icon in Settings → Devices & Services** — brand images for custom
-integrations come from [home-assistant/brands](https://github.com/home-assistant/brands),
-not from this repository, so this needs a PR there rather than a release here.
+**No icon in Settings → Devices & Services** — requires Home Assistant
+2026.3.0 or newer. Earlier cores don't read local brand images and always
+show the placeholder; this is cosmetic and does not affect functionality.
 
 ## Development
 
