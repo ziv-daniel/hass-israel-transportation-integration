@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-08-20
+
+### Fixed
+- Train sensors could show "Next Train: 0m" when a real train was actually minutes away. The Israel Rail API doesn't strictly filter to future departures and sometimes returns a train that has already left (observed up to 26 minutes in the past) ahead of the real upcoming ones; that negative time-to-departure was clamped to 0 and sorted ahead of the correct next train instead of being filtered out.
+
+### Changed
+- A stale, unused, hand-maintained train station list (`scripts/train_stations.py`) was removed. It was never read at runtime — the config flow already sources station data from the `israel-rail-api` library — and its codes were wrong.
+
 ## [1.1.1] - 2026-08-19
 
 ### Fixed
