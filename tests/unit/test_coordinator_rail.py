@@ -145,7 +145,9 @@ class TestProcessRailRoutes:
             _route(now, 40, 120),
         ]
 
-        coordinator = _make_rail_coordinator(hass, simple_mock_config_entry, max_arrivals=3)
+        coordinator = _make_rail_coordinator(
+            hass, simple_mock_config_entry, max_arrivals=3
+        )
         result = _process(coordinator, routes, now)
 
         arrivals = result["train_route"]
