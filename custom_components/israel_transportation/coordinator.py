@@ -350,7 +350,11 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         now = dt_util.now()
         route_key = "train_route"
 
-        for idx, route in enumerate(routes[: self.max_arrivals]):
+        # Iterate every returned route, not just the first max_arrivals: the
+        # API can put an already-departed train ahead of the real upcoming
+        # ones (see the skip below), so slicing before filtering could drop
+        # a genuine future train in its place. Truncate after filtering.
+        for idx, route in enumerate(routes):
             # Get trains from route
             trains = route.trains if hasattr(route, "trains") else []
             if not trains:
@@ -376,9 +380,16 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             except (ValueError, TypeError):
                 continue
 
-            # Calculate minutes until departure
+            # Calculate minutes until departure. The Rail API's searchTrain
+            # sometimes returns a train that has already left alongside the
+            # upcoming ones — observed up to 26 minutes in the past — rather
+            # than strictly filtering to future departures. Clamping that to
+            # 0 made an already-departed train sort as "next" ahead of the
+            # real next train, so skip it instead of keeping a false 0m.
             time_delta = departure_time - now
-            minutes_until = max(0, int(time_delta.total_seconds() / 60))
+            if time_delta.total_seconds() < 0:
+                continue
+            minutes_until = int(time_delta.total_seconds() / 60)
 
             # Get platform and train number from raw data
             platform = first_train.platform if hasattr(first_train, "platform") else ""
@@ -431,9 +442,10 @@ class SilentBusCoordinator(DataUpdateCoordinator):
 
             processed[route_key].append(processed_route)
 
-        # Sort by departure time
+        # Sort by departure time and cap at the configured number of arrivals
         if route_key in processed:
             processed[route_key].sort(key=lambda x: x["minutes_until"])
+            processed[route_key] = processed[route_key][: self.max_arrivals]
 
         return processed
 
