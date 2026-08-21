@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-08-21
+
+### Fixed
+- "Browse stations by city" showed every city/station mixed together regardless of transport type when configuring a Light Rail sensor. Station data is now tagged with the GTFS route type(s) it actually serves, and the picker filters by it.
+- City assignment for the picker was based on a text heuristic that scanned a stop's name for a known city's Hebrew name, which false-positives whenever a city name overlaps a common word or a person's name reused in street naming nationwide — e.g. a stop on "Ariel Sharon" street (a common boulevard name unrelated to the city of Ariel) was filed under "Ariel" no matter where it actually was, including a stop ~1km from Sderot showing up as the nearest "Ariel" match. City assignment now reads MOT's own authoritative city field for each stop instead of guessing from its name.
+
+### Changed
+- Regenerated the bundled station index with the corrected city assignment — real localities previously missing from the internal city name table (Rosh HaAyin, Kiryat Gat, Nof HaGalil, etc.) are now properly represented instead of disappearing into "Other" or colliding with an unrelated city.
+
 ## [1.1.2] - 2026-08-20
 
 ### Fixed
