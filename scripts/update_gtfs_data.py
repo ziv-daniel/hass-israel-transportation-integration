@@ -16,7 +16,7 @@ import re
 import zipfile
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Set
 import sys
 
 try:
@@ -51,6 +51,12 @@ except ImportError:
 GTFS_URL = "https://gtfs.mot.gov.il/gtfsfiles/israel-public-transportation.zip"
 OUTPUT_DIR = Path("custom_components/israel_transportation/gtfs_data")
 CITIES_INDEX_FILE = "cities_index.json"
+
+# GTFS route_type codes (per the GTFS spec) relevant to filtering stations by
+# transport mode. A station can be served by multiple route_types (e.g. both
+# a bus route and a light rail route stopping at the same physical stop).
+GTFS_ROUTE_TYPE_LIGHT_RAIL = 0
+GTFS_ROUTE_TYPE_BUS = 3
 
 
 def extract_city_from_name(stop_name: str) -> str:
@@ -544,6 +550,76 @@ def parse_stop_times(zip_path: Path) -> Dict[str, set]:
     return stop_trips
 
 
+def build_stop_route_types(
+    routes: Dict[str, Dict], trips: Dict[str, Dict], stop_trips: Dict[str, set]
+) -> Dict[str, Set[int]]:
+    """Compute the set of GTFS route_types serving each stop.
+
+    Joins stop_id -> trip_id (from stop_times.txt) -> route_id (from trips.txt)
+    -> route_type (from routes.txt) to determine which transport mode(s) serve
+    each stop. A stop can legitimately be served by more than one mode (e.g. a
+    stop with both a bus route and a light rail route).
+
+    Args:
+        routes: Routes data from parse_routes (route_id -> route dict, incl. route_type)
+        trips: Trips data from parse_trips (trip_id -> trip dict, incl. route_id)
+        stop_trips: Stop-to-trip mappings from parse_stop_times
+
+    Returns:
+        Dictionary mapping stop_id to a set of route_type ints, e.g. {0, 3}
+    """
+    print("Building stop -> route_type index...")
+
+    stop_route_types: Dict[str, Set[int]] = defaultdict(set)
+
+    for stop_id, trip_ids in stop_trips.items():
+        for trip_id in trip_ids:
+            trip_data = trips.get(trip_id)
+            if not trip_data:
+                continue
+
+            route_data = routes.get(trip_data["route_id"])
+            if not route_data:
+                continue
+
+            route_type_raw = route_data.get("route_type", "")
+            try:
+                route_type = int(route_type_raw)
+            except (ValueError, TypeError):
+                continue
+
+            stop_route_types[stop_id].add(route_type)
+
+    print(f"[OK] Tagged route types for {len(stop_route_types):,} stops")
+    return stop_route_types
+
+
+def annotate_route_types(
+    cities_index: Dict, stop_route_types: Dict[str, Set[int]]
+) -> None:
+    """Tag each station in cities_index with the route_types that serve it.
+
+    Mutates cities_index in place, adding a sorted "route_types" list (e.g.
+    [0, 3]) to each station dict. Stations with no known trips (not found in
+    stop_times.txt, or whose trips/routes couldn't be resolved) get an empty
+    list rather than being omitted, so consumers can distinguish "known to
+    serve no tracked route" from "not yet tagged" (the field's mere presence).
+
+    Args:
+        cities_index: Cities index from parse_stops (mutated in place)
+        stop_route_types: Stop-to-route_type mapping from build_stop_route_types
+    """
+    tagged = 0
+    for city_data in cities_index.values():
+        for station in city_data["stations"]:
+            route_types = stop_route_types.get(station["id"], set())
+            station["route_types"] = sorted(route_types)
+            if route_types:
+                tagged += 1
+
+    print(f"[OK] Annotated route_types on stations ({tagged:,} stations have data)")
+
+
 def build_routes_index(
     stops_data: Dict, routes: Dict, trips: Dict, stop_trips: Dict
 ) -> Dict:
@@ -716,6 +792,15 @@ def print_statistics(cities_index: Dict, routes_index: Dict = None):
 
     print(f"Total Cities: {len(cities_index)}")
     print(f"Total Stations: {total_stations:,}")
+
+    light_rail_stations = sum(
+        1
+        for city in cities_index.values()
+        for station in city["stations"]
+        if GTFS_ROUTE_TYPE_LIGHT_RAIL in station.get("route_types", [])
+    )
+    print(f"Total Light Rail Stations: {light_rail_stations:,}")
+
     print("\nTop 10 Cities by Station Count:")
 
     # Sort cities by station count
@@ -756,6 +841,11 @@ async def main():
         routes = parse_routes(zip_path)
         trips = parse_trips(zip_path)
         stop_trips = parse_stop_times(zip_path)
+
+        # Step 3.5: Tag each station with the transport mode(s) (route_types)
+        # that serve it, so the config flow can filter bus vs. light rail.
+        stop_route_types = build_stop_route_types(routes, trips, stop_trips)
+        annotate_route_types(cities_index, stop_route_types)
 
         # Step 4: Build routes index
         routes_index = build_routes_index(cities_index, routes, trips, stop_trips)
