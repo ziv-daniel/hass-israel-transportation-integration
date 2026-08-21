@@ -388,9 +388,7 @@ def _station_matches_transport_type(
     return any(rt != GTFS_ROUTE_TYPE_LIGHT_RAIL for rt in route_types)
 
 
-def _filter_stations(
-    stations: List[Dict], transport_type: Optional[str]
-) -> List[Dict]:
+def _filter_stations(stations: List[Dict], transport_type: Optional[str]) -> List[Dict]:
     """Filter a station list down to those matching transport_type.
 
     A no-op (returns the list unchanged) when transport_type is None.

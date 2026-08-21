@@ -149,9 +149,7 @@ class TestGetStationsForCity:
         stations = gtfs_loader.get_stations_for_city("Testville")
         assert len(stations) == 4
 
-    def test_light_rail_filter_returns_only_matching_stations(
-        self, mock_cities_index
-    ):
+    def test_light_rail_filter_returns_only_matching_stations(self, mock_cities_index):
         stations = gtfs_loader.get_stations_for_city(
             "Testville", transport_type=TRANSPORT_TYPE_LIGHT_RAIL
         )
