@@ -294,8 +294,11 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         home_lon = self.hass.config.longitude
 
         # Get cities list - shows 3 closest first (if coordinates available), then all others alphabetically
-        # No filtering by min_stations - shows ALL cities
-        cities = get_cities_list(home_lat=home_lat, home_lon=home_lon)
+        # No filtering by min_stations - shows ALL cities (matching self._transport_type,
+        # e.g. only light-rail-served cities when configuring a light rail sensor)
+        cities = get_cities_list(
+            home_lat=home_lat, home_lon=home_lon, transport_type=self._transport_type
+        )
 
         if not cities:
             # No GTFS data available, fall back to manual entry
@@ -369,8 +372,10 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._selected_city = city_id
             return await self.async_step_select_station()
 
-        # Get ALL cities (no minimum station filter)
-        cities = get_all_cities_list()
+        # Get ALL cities (no minimum station filter), still restricted to the
+        # transport type being configured so bus/light-rail don't leak into
+        # each other's pickers.
+        cities = get_all_cities_list(transport_type=self._transport_type)
 
         if not cities:
             return await self.async_step_station_config()
@@ -429,7 +434,9 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_station_config()
 
             # Get station details from GTFS data and match user input
-            stations = get_stations_for_city(self._selected_city)
+            stations = get_stations_for_city(
+                self._selected_city, transport_type=self._transport_type
+            )
             selected_station = self._find_station_by_input(stations, station_input)
 
             if selected_station:
@@ -492,7 +499,9 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             _LOGGER.debug(
                 "Fetching stations for city: %r", self._selected_city or "Other"
             )
-            stations = get_stations_for_city(self._selected_city or "Other")
+            stations = get_stations_for_city(
+                self._selected_city or "Other", transport_type=self._transport_type
+            )
             _LOGGER.debug(
                 "Found %d stations for city %r", len(stations), self._selected_city
             )
