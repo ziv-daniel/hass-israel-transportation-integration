@@ -16,7 +16,7 @@ import re
 import zipfile
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 import sys
 
 try:
@@ -171,6 +171,37 @@ def extract_city_from_name(stop_name: str) -> str:
     return "Other"
 
 
+def extract_city_from_desc(stop_desc: str) -> Optional[str]:
+    """Extract the official city name from a stop's stop_desc field.
+
+    MOT's GTFS feed encodes structured address info in stop_desc as
+    "רחוב: <street> עיר: <city> רציף: <platform> קומה: <floor>" — the
+    עיר (city) segment is the ministry's own municipality assignment for
+    the stop, keyed by its actual location. This is authoritative and
+    unambiguous, unlike extract_city_from_name()'s text-heuristic (which
+    false-positives whenever a city's name overlaps a common word or a
+    person's name reused in street naming — e.g. a stop on "אריאל שרון"
+    street, named after former PM Ariel Sharon, getting matched to the
+    city "Ariel" no matter where in the country it actually is).
+
+    Args:
+        stop_desc: The stop_desc field from GTFS stops.txt
+
+    Returns:
+        The Hebrew city name, or None if stop_desc has no city field.
+
+    Examples:
+        >>> extract_city_from_desc("רחוב: אדמונית החורש 4 עיר: שדרות רציף:  קומה: ")
+        'שדרות'
+    """
+    match = re.search(r"עיר:\s*([^:]*?)\s*רציף:", stop_desc)
+    if match:
+        city_he = match.group(1).strip()
+        if city_he:
+            return city_he
+    return None
+
+
 async def download_gtfs() -> Path:
     """Download GTFS zip file from Israeli Ministry of Transport.
 
@@ -263,6 +294,17 @@ def parse_stops(zip_path: Path) -> Dict[str, Dict]:
                 stop_code_idx = None
                 print("Warning: stops.txt has no stop_code column")
 
+            # stop_desc carries MOT's own structured address, including the
+            # official municipality ("עיר: <city>"). Prefer that over
+            # extract_city_from_name()'s text-heuristic — see
+            # extract_city_from_desc()'s docstring for why the heuristic
+            # alone misfiles stops.
+            try:
+                stop_desc_idx = header.index("stop_desc")
+            except ValueError:
+                stop_desc_idx = None
+                print("Warning: stops.txt has no stop_desc column")
+
             # Parse each stop
             for line_num, line in enumerate(lines[1:], start=2):
                 # Handle CSV properly (quoted fields may contain commas)
@@ -283,6 +325,9 @@ def parse_stops(zip_path: Path) -> Dict[str, Dict]:
                     stop_code = ""
                     if stop_code_idx is not None and len(parts) > stop_code_idx:
                         stop_code = parts[stop_code_idx].strip().strip('"')
+                    stop_desc = ""
+                    if stop_desc_idx is not None and len(parts) > stop_desc_idx:
+                        stop_desc = parts[stop_desc_idx].strip().strip('"')
                 except (ValueError, IndexError):
                     # Skip malformed lines
                     skipped_stops += 1
@@ -293,14 +338,26 @@ def parse_stops(zip_path: Path) -> Dict[str, Dict]:
                     skipped_stops += 1
                     continue
 
-                # Extract city
-                city = extract_city_from_name(stop_name)
+                # Extract city: official stop_desc field first (authoritative),
+                # falling back to the name heuristic only for the small
+                # minority of stops with no stop_desc (mostly rail stations,
+                # which this bus/light-rail index doesn't surface anyway).
+                city_he = extract_city_from_desc(stop_desc)
+                if city_he:
+                    city = CITY_MAPPINGS.get(city_he, city_he)
+                else:
+                    city = extract_city_from_name(stop_name)
 
                 # Initialize city entry if needed
                 if city not in cities_index:
+                    # For a mapped English id, use the canonical Hebrew name
+                    # from CITY_MAPPINGS (deterministic regardless of which
+                    # spelling variant of the city was seen first). For an
+                    # unmapped city, city itself IS the official Hebrew name.
+                    city_name_he = get_hebrew_name(city) or (city_he or "")
                     cities_index[city] = {
                         "name": city,
-                        "name_he": get_hebrew_name(city),  # Populate Hebrew name
+                        "name_he": city_name_he,  # Populate Hebrew name
                         "stations": [],
                     }
 

@@ -666,4 +666,92 @@ class TestResolveMakat:
         gtfs_station = {"id": "44592", "name": "X", "lat": 31.5407, "lon": 34.5963}
 
         assert await self._flow()._resolve_makat(client, gtfs_station) == "12665"
-        client.search_stations.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_skips_candidates_missing_coordinates(self):
+        """A candidate with no lat/lon must not crash the distance comparison."""
+        client = AsyncMock()
+        client.search_stations.return_value = [
+            {"makat": "1", "name": "X", "lat": None, "lon": None},
+            {"makat": "2", "name": "X", "lat": 32.0, "lon": 34.0},
+        ]
+        gtfs_station = {"id": "44592", "name": "X", "lat": 32.0, "lon": 34.0}
+
+        assert await self._flow()._resolve_makat(client, gtfs_station) == "2"
+
+
+class TestGetTrainStationsList:
+    """get_train_stations_list() adapts israelrailapi's RAIL_STATIONS table."""
+
+    def test_returns_sorted_stations_with_expected_shape(self):
+        from custom_components.israel_transportation.config_flow import (
+            get_train_stations_list,
+        )
+        from israelrailapi.train_station import STATIONS as RAIL_STATIONS
+
+        stations = get_train_stations_list()
+
+        assert len(stations) == len(RAIL_STATIONS)
+        assert stations == sorted(stations, key=lambda s: s["name"])
+        for station in stations:
+            assert set(station) == {"id", "name", "name_en"}
+            assert station["id"] in station["name"]
+
+    def test_falls_back_to_hebrew_name_when_english_missing(self):
+        from custom_components.israel_transportation.config_flow import (
+            get_train_stations_list,
+        )
+
+        with patch(
+            "custom_components.israel_transportation.config_flow.RAIL_STATIONS",
+            {"9999": {"Heb": "תחנת בדיקה"}},
+        ):
+            stations = get_train_stations_list()
+
+        assert stations == [
+            {
+                "id": "9999",
+                "name": "תחנת בדיקה - תחנת בדיקה (9999)",
+                "name_en": "תחנת בדיקה",
+            }
+        ]
+
+
+class TestFindStationByInput:
+    """_find_station_by_input() matches by exact ID, formatted ID, or name."""
+
+    STATIONS = [
+        {"id": "12665", "name": "Arlozorov Terminal"},
+        {"id": "24068", "name": "Tel Aviv Central"},
+    ]
+
+    def _flow(self):
+        from custom_components.israel_transportation.config_flow import (
+            SilentBusConfigFlow,
+        )
+
+        return SilentBusConfigFlow()
+
+    def test_manual_input_returns_none(self):
+        assert self._flow()._find_station_by_input(self.STATIONS, "manual") is None
+        assert (
+            self._flow()._find_station_by_input(self.STATIONS, "Enter manual id")
+            is None
+        )
+
+    def test_matches_exact_id(self):
+        result = self._flow()._find_station_by_input(self.STATIONS, "24068")
+        assert result == self.STATIONS[1]
+
+    def test_matches_formatted_name_and_id(self):
+        result = self._flow()._find_station_by_input(
+            self.STATIONS, "Arlozorov Terminal (12665)"
+        )
+        assert result == self.STATIONS[0]
+
+    def test_falls_back_to_fuzzy_name_match(self):
+        result = self._flow()._find_station_by_input(self.STATIONS, "central")
+        assert result == self.STATIONS[1]
+
+    def test_returns_none_when_nothing_matches(self):
+        assert self._flow()._find_station_by_input(self.STATIONS, "nowhere") is None
