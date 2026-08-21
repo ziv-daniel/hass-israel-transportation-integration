@@ -991,3 +991,590 @@ class TestFormSchemasSerialize:
 
         assert result["step_id"] == "select_city_all"
         assert self._serialize(result)
+
+
+# ============================================================================
+# STATION SELECTION METHOD BRANCH COVERAGE
+# ============================================================================
+
+
+class TestStationSelectionMethodBranches:
+    """Branches of async_step_station_selection_method not hit elsewhere."""
+
+    @pytest.mark.asyncio
+    async def test_no_gtfs_data_offers_manual_entry_only(self, hass: HomeAssistant):
+        """Without GTFS data, bus/light rail should only offer manual entry."""
+        with patch(
+            "custom_components.israel_transportation.config_flow.is_gtfs_data_available",
+            return_value=False,
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": config_entries.SOURCE_USER}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS}
+            )
+
+        assert result["step_id"] == "station_selection_method"
+
+        schema = result["data_schema"].schema
+        (validator,) = schema.values()
+        assert set(validator.container) == {"manual"}
+
+    @pytest.mark.asyncio
+    async def test_missing_gtfs_index_is_swallowed(self, hass: HomeAssistant):
+        """A missing bundled GTFS index must not crash this step."""
+        with patch(
+            "custom_components.israel_transportation.config_flow.async_load_cities_index",
+            side_effect=FileNotFoundError,
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": config_entries.SOURCE_USER}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS}
+            )
+
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "station_selection_method"
+
+
+# ============================================================================
+# CITY PICKER BRANCH COVERAGE
+# ============================================================================
+
+
+class TestSelectCityBranches:
+    """Branches of async_step_select_city not hit by the schema-serialize tests."""
+
+    @pytest.mark.asyncio
+    async def test_manual_choice_redirects_to_station_config(self, hass: HomeAssistant):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"selection_method": "city_dropdown"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"city_id": "manual"}
+        )
+
+        assert result["step_id"] == "station_config"
+
+    @pytest.mark.asyncio
+    async def test_bracket_wrapped_city_id_is_extracted(self, hass: HomeAssistant):
+        """A combobox custom value like 'City Name [city_id]' extracts city_id."""
+        with patch(
+            "custom_components.israel_transportation.config_flow.get_stations_for_city",
+            return_value=[{"id": "1", "name": "Test Stop", "lat": 32.0, "lon": 34.0}],
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": config_entries.SOURCE_USER}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"selection_method": "city_dropdown"}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"city_id": "Ariel / אריאל [Ariel]"}
+            )
+
+        assert result["step_id"] == "select_station"
+        # Only the bracket content ("Ariel"), not the whole combobox string,
+        # should have been used as the city id.
+        assert result["description_placeholders"]["city_name"] == "Ariel"
+
+    @pytest.mark.asyncio
+    async def test_show_all_choice_redirects_to_select_city_all(
+        self, hass: HomeAssistant
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"selection_method": "city_dropdown"}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"city_id": "show_all"}
+        )
+
+        assert result["step_id"] == "select_city_all"
+
+    @pytest.mark.asyncio
+    async def test_no_cities_falls_back_to_manual(self, hass: HomeAssistant):
+        with patch(
+            "custom_components.israel_transportation.config_flow.get_cities_list",
+            return_value=[],
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": config_entries.SOURCE_USER}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"selection_method": "city_dropdown"}
+            )
+
+        assert result["step_id"] == "station_config"
+
+    @pytest.mark.asyncio
+    async def test_unexpected_exception_shows_unknown_error(self, hass: HomeAssistant):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"selection_method": "city_dropdown"}
+        )
+
+        with patch(
+            "custom_components.israel_transportation.config_flow."
+            "SilentBusConfigFlow.async_step_select_station",
+            side_effect=RuntimeError("boom"),
+        ):
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"city_id": "Some City"}
+            )
+
+        assert result["step_id"] == "select_city"
+        assert result["errors"] == {"base": "unknown"}
+
+
+# ============================================================================
+# "SHOW ALL CITIES" PICKER BRANCH COVERAGE
+# ============================================================================
+
+
+class TestSelectCityAll:
+    """Branches of async_step_select_city_all not hit by the schema-serialize test."""
+
+    @pytest.mark.asyncio
+    async def test_selecting_a_city_advances_to_station_picker(
+        self, hass: HomeAssistant
+    ):
+        with (
+            patch(
+                "custom_components.israel_transportation.config_flow.get_all_cities_list",
+                return_value=[{"id": "Ariel", "name": "Ariel / אריאל (5 stations)"}],
+            ),
+            patch(
+                "custom_components.israel_transportation.config_flow.get_stations_for_city",
+                return_value=[
+                    {"id": "1", "name": "Test Stop", "lat": 32.0, "lon": 34.0}
+                ],
+            ),
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": config_entries.SOURCE_USER}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"selection_method": "city_dropdown"}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"city_id": "show_all"}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"city_id": "Ariel"}
+            )
+
+        assert result["step_id"] == "select_station"
+
+    @pytest.mark.asyncio
+    async def test_manual_choice_redirects_to_station_config(self, hass: HomeAssistant):
+        with patch(
+            "custom_components.israel_transportation.config_flow.get_all_cities_list",
+            return_value=[{"id": "Ariel", "name": "Ariel / אריאל (5 stations)"}],
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": config_entries.SOURCE_USER}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"selection_method": "city_dropdown"}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"city_id": "show_all"}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"city_id": "manual"}
+            )
+
+        assert result["step_id"] == "station_config"
+
+    @pytest.mark.asyncio
+    async def test_no_cities_at_all_falls_back_to_manual(self, hass: HomeAssistant):
+        with patch(
+            "custom_components.israel_transportation.config_flow.get_all_cities_list",
+            return_value=[],
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": config_entries.SOURCE_USER}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"selection_method": "city_dropdown"}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"city_id": "show_all"}
+            )
+
+        assert result["step_id"] == "station_config"
+
+
+# ============================================================================
+# STATION PICKER BRANCH COVERAGE
+# ============================================================================
+
+
+class TestSelectStation:
+    """Branches of async_step_select_station not hit by the schema-serialize test."""
+
+    @staticmethod
+    async def _navigate_to_select_station(hass: HomeAssistant):
+        with patch(
+            "custom_components.israel_transportation.config_flow.get_cities_list",
+            return_value=[{"id": "Ariel", "name": "Ariel / אריאל (5 stations)"}],
+        ):
+            result = await hass.config_entries.flow.async_init(
+                DOMAIN, context={"source": config_entries.SOURCE_USER}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"selection_method": "city_dropdown"}
+            )
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"city_id": "Ariel"}
+            )
+        return result
+
+    @pytest.mark.asyncio
+    async def test_happy_path_advances_to_bus_lines(self, hass: HomeAssistant):
+        station = {
+            "id": "19524",
+            "code": "12665",
+            "name": "Test Stop",
+            "lat": 32.0,
+            "lon": 34.0,
+        }
+        with (
+            patch(
+                "custom_components.israel_transportation.config_flow.get_stations_for_city",
+                return_value=[station],
+            ),
+            patch(
+                "custom_components.israel_transportation.config_flow.GovApiClient"
+            ) as mock_client,
+        ):
+            mock_client.return_value.get_station = AsyncMock(
+                return_value={"Name": "Test Stop", "Makat": 12665}
+            )
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client.return_value
+            )
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await self._navigate_to_select_station(hass)
+            assert result["step_id"] == "select_station"
+
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"station_id": "19524"}
+            )
+
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "bus_lines"
+
+    @pytest.mark.asyncio
+    async def test_manual_choice_redirects_to_station_config(self, hass: HomeAssistant):
+        station = {"id": "19524", "name": "Test Stop", "lat": 32.0, "lon": 34.0}
+        with patch(
+            "custom_components.israel_transportation.config_flow.get_stations_for_city",
+            return_value=[station],
+        ):
+            result = await self._navigate_to_select_station(hass)
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"station_id": "manual"}
+            )
+
+        assert result["step_id"] == "station_config"
+
+    @pytest.mark.asyncio
+    async def test_unmatched_station_shows_not_found(self, hass: HomeAssistant):
+        station = {"id": "19524", "name": "Test Stop", "lat": 32.0, "lon": 34.0}
+        with patch(
+            "custom_components.israel_transportation.config_flow.get_stations_for_city",
+            return_value=[station],
+        ):
+            result = await self._navigate_to_select_station(hass)
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"station_id": "nowhere at all"}
+            )
+
+        assert result["step_id"] == "select_station"
+        assert result["errors"] == {"base": ERROR_STATION_NOT_FOUND}
+
+    @pytest.mark.asyncio
+    async def test_connection_error_is_surfaced(self, hass: HomeAssistant):
+        station = {
+            "id": "19524",
+            "code": "12665",
+            "name": "Test Stop",
+            "lat": 32.0,
+            "lon": 34.0,
+        }
+        with (
+            patch(
+                "custom_components.israel_transportation.config_flow.get_stations_for_city",
+                return_value=[station],
+            ),
+            patch(
+                "custom_components.israel_transportation.config_flow.GovApiClient"
+            ) as mock_client,
+        ):
+            mock_client.return_value.get_station = AsyncMock(
+                side_effect=GovApiConnectionError("boom")
+            )
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client.return_value
+            )
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await self._navigate_to_select_station(hass)
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"station_id": "19524"}
+            )
+
+        assert result["step_id"] == "select_station"
+        assert result["errors"] == {"base": ERROR_CANNOT_CONNECT}
+
+    @pytest.mark.asyncio
+    async def test_unresolvable_makat_shows_not_found(self, hass: HomeAssistant):
+        # No "code" field, so _resolve_makat falls back to search_stations,
+        # which finds nothing — makat stays None.
+        station = {"id": "19524", "name": "Test Stop", "lat": 32.0, "lon": 34.0}
+        with (
+            patch(
+                "custom_components.israel_transportation.config_flow.get_stations_for_city",
+                return_value=[station],
+            ),
+            patch(
+                "custom_components.israel_transportation.config_flow.GovApiClient"
+            ) as mock_client,
+        ):
+            mock_client.return_value.search_stations = AsyncMock(return_value=[])
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client.return_value
+            )
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await self._navigate_to_select_station(hass)
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"station_id": "19524"}
+            )
+
+        assert result["step_id"] == "select_station"
+        assert result["errors"] == {"base": ERROR_STATION_NOT_FOUND}
+
+    @pytest.mark.asyncio
+    async def test_mot_api_validation_failure_shows_not_found(
+        self, hass: HomeAssistant
+    ):
+        station = {
+            "id": "19524",
+            "code": "12665",
+            "name": "Test Stop",
+            "lat": 32.0,
+            "lon": 34.0,
+        }
+        with (
+            patch(
+                "custom_components.israel_transportation.config_flow.get_stations_for_city",
+                return_value=[station],
+            ),
+            patch(
+                "custom_components.israel_transportation.config_flow.GovApiClient"
+            ) as mock_client,
+        ):
+            mock_client.return_value.get_station = AsyncMock(
+                return_value={"Name": None, "Makat": 0}
+            )
+            mock_client.return_value.__aenter__ = AsyncMock(
+                return_value=mock_client.return_value
+            )
+            mock_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await self._navigate_to_select_station(hass)
+            result = await hass.config_entries.flow.async_configure(
+                result["flow_id"], {"station_id": "19524"}
+            )
+
+        assert result["step_id"] == "select_station"
+        assert result["errors"] == {"base": ERROR_STATION_NOT_FOUND}
+
+    @pytest.mark.asyncio
+    async def test_no_stations_for_city_falls_back_to_manual(self, hass: HomeAssistant):
+        with patch(
+            "custom_components.israel_transportation.config_flow.get_stations_for_city",
+            return_value=[],
+        ):
+            result = await self._navigate_to_select_station(hass)
+
+        assert result["step_id"] == "station_config"
+
+    @pytest.mark.asyncio
+    async def test_exception_getting_stations_falls_back_to_manual(
+        self, hass: HomeAssistant
+    ):
+        with patch(
+            "custom_components.israel_transportation.config_flow.get_stations_for_city",
+            side_effect=RuntimeError("boom"),
+        ):
+            result = await self._navigate_to_select_station(hass)
+
+        assert result["step_id"] == "station_config"
+
+
+# ============================================================================
+# TRAIN DROPDOWN SELECTION COVERAGE
+# ============================================================================
+
+
+class TestTrainDropdownSelection:
+    """async_step_train_select_from / async_step_train_select_to."""
+
+    @staticmethod
+    async def _navigate_to_train_select_from(hass: HomeAssistant):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"selection_method": "train_dropdown"}
+        )
+        assert result["step_id"] == "train_select_from"
+        return result
+
+    @staticmethod
+    def _real_station_ids():
+        from israelrailapi.train_station import STATIONS as RAIL_STATIONS
+
+        ids = list(RAIL_STATIONS)
+        return ids[0], ids[1]
+
+    @pytest.mark.asyncio
+    async def test_selecting_from_and_to_creates_entry(self, hass: HomeAssistant):
+        from_id, to_id = self._real_station_ids()
+
+        result = await self._navigate_to_train_select_from(hass)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"from_station": from_id}
+        )
+        assert result["step_id"] == "train_select_to"
+
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"to_station": to_id}
+        )
+
+        assert result["type"] == FlowResultType.CREATE_ENTRY
+        assert result["data"][CONF_FROM_STATION] == from_id
+        assert result["data"][CONF_TO_STATION] == to_id
+
+    @pytest.mark.asyncio
+    async def test_from_manual_choice_redirects_to_train_config(
+        self, hass: HomeAssistant
+    ):
+        result = await self._navigate_to_train_select_from(hass)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"from_station": "manual"}
+        )
+
+        assert result["step_id"] == "train_config"
+
+    @pytest.mark.asyncio
+    async def test_to_manual_choice_redirects_to_train_config(
+        self, hass: HomeAssistant
+    ):
+        from_id, _ = self._real_station_ids()
+
+        result = await self._navigate_to_train_select_from(hass)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"from_station": from_id}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"to_station": "manual"}
+        )
+
+        assert result["step_id"] == "train_config"
+
+    @pytest.mark.asyncio
+    async def test_same_from_and_to_station_is_rejected(self, hass: HomeAssistant):
+        from_id, _ = self._real_station_ids()
+
+        result = await self._navigate_to_train_select_from(hass)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"from_station": from_id}
+        )
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"to_station": from_id}
+        )
+
+        assert result["step_id"] == "train_select_to"
+        assert result["errors"] == {"to_station": "cannot_be_same"}
+
+
+# ============================================================================
+# OPTIONS FLOW BRANCH COVERAGE
+# ============================================================================
+
+
+class TestOptionsFlowNoLines:
+    @pytest.mark.asyncio
+    async def test_blank_lines_shows_error(self, hass: HomeAssistant):
+        from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            data={
+                CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS,
+                CONF_STATION_ID: "24068",
+                CONF_STATION_NAME: "Test Station",
+                CONF_BUS_LINES: ["249"],
+                CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
+                CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
+            },
+        )
+        entry.add_to_hass(hass)
+
+        result = await hass.config_entries.options.async_init(entry.entry_id)
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"],
+            {
+                CONF_BUS_LINES: " , , ",
+                CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
+                CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
+            },
+        )
+
+        assert result["type"] == FlowResultType.FORM
+        assert result["errors"] == {"base": "no_lines"}
