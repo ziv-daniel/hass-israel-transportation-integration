@@ -20,6 +20,8 @@ try:
 except ImportError:
     aiohttp = None  # Will be available in Home Assistant environment
 
+from .const import TRANSPORT_TYPE_LIGHT_RAIL
+
 _LOGGER = logging.getLogger(__name__)
 
 # Cache for loaded GTFS data
@@ -35,6 +37,12 @@ ROUTES_ASSET_NAME = "routes_index.json.gz"
 
 # Refresh interval: re-download assets if older than 7 days
 GTFS_REFRESH_INTERVAL_SECONDS = 7 * 24 * 3600
+
+# GTFS route_type codes (per the GTFS spec) used to filter stations by
+# transport mode. These match the values scripts/update_gtfs_data.py tags
+# onto each station's "route_types" list.
+GTFS_ROUTE_TYPE_LIGHT_RAIL = 0
+GTFS_ROUTE_TYPE_BUS = 3
 
 
 def get_gtfs_data_path() -> Path:
@@ -340,12 +348,65 @@ async def async_load_cities_index(hass=None) -> Dict:
     return await asyncio.to_thread(load_cities_index)
 
 
+def _station_matches_transport_type(
+    station: Dict, transport_type: Optional[str]
+) -> bool:
+    """Return True if a station serves the given transport type.
+
+    Stations are tagged by scripts/update_gtfs_data.py with a "route_types"
+    list of GTFS route_type ints (0 = light rail/tram, 3 = bus). A station can
+    legitimately serve more than one mode, so this checks for any overlap
+    rather than assuming exclusivity.
+
+    Stations from GTFS data generated before this tagging existed won't have
+    a "route_types" key at all — those are treated as matching every
+    transport type, so existing bundled data keeps working (unfiltered) until
+    the GTFS data is regenerated, rather than silently disappearing from
+    every list.
+
+    Args:
+        station: Station dict from the cities index
+        transport_type: One of the TRANSPORT_TYPE_* constants, or None for
+            no filtering
+
+    Returns:
+        True if the station should be included for this transport_type
+    """
+    if transport_type is None:
+        return True
+
+    route_types = station.get("route_types")
+    if route_types is None:
+        # Untagged/legacy data — don't filter it out.
+        return True
+
+    if transport_type == TRANSPORT_TYPE_LIGHT_RAIL:
+        return GTFS_ROUTE_TYPE_LIGHT_RAIL in route_types
+
+    # Any non-light-rail transport type (bus, etc.): match a station that
+    # serves at least one non-light-rail route.
+    return any(rt != GTFS_ROUTE_TYPE_LIGHT_RAIL for rt in route_types)
+
+
+def _filter_stations(
+    stations: List[Dict], transport_type: Optional[str]
+) -> List[Dict]:
+    """Filter a station list down to those matching transport_type.
+
+    A no-op (returns the list unchanged) when transport_type is None.
+    """
+    if transport_type is None:
+        return stations
+    return [s for s in stations if _station_matches_transport_type(s, transport_type)]
+
+
 def get_cities_list(
     home_lat: Optional[float] = None,
     home_lon: Optional[float] = None,
     min_stations: int = 1,
     max_cities: int = 9999,
     top_cities_count: int = 3,
+    transport_type: Optional[str] = None,
 ) -> List[Dict[str, str]]:
     """Get list of cities with transit stations, filtered and sorted.
 
@@ -359,6 +420,11 @@ def get_cities_list(
         min_stations: Minimum number of stations required (default: 1)
         max_cities: Maximum number of cities to return (default: 9999 = all)
         top_cities_count: Number of closest cities to show first (default: 3)
+        transport_type: If given (one of the TRANSPORT_TYPE_* constants),
+            only cities with at least one station serving that transport type
+            are included, and station_count reflects only matching stations.
+            None (default) returns everything, unfiltered — same as before
+            this parameter existed.
 
     Returns:
         List of dictionaries with 'id', 'name', 'name_he', and 'station_count' keys
@@ -380,11 +446,12 @@ def get_cities_list(
 
     cities = []
     for city_id, city_data in cities_index.items():
-        station_count = len(city_data["stations"])
-
         # Skip "Other" category in main list (can be accessed via manual entry)
         if city_id == "Other":
             continue
+
+        stations = _filter_stations(city_data["stations"], transport_type)
+        station_count = len(stations)
 
         # Filter by minimum station count
         if station_count < min_stations:
@@ -410,7 +477,11 @@ def get_cities_list(
     if home_lat is not None and home_lon is not None:
         # Get closest cities by location
         nearby_cities = get_cities_near_location(
-            home_lat, home_lon, max_distance_km=9999, max_cities=top_cities_count
+            home_lat,
+            home_lon,
+            max_distance_km=9999,
+            max_cities=top_cities_count,
+            transport_type=transport_type,
         )
         nearby_city_ids = {c["id"] for c in nearby_cities}
 
@@ -442,10 +513,19 @@ def get_cities_list(
     return result[:max_cities]
 
 
-def get_all_cities_list() -> List[Dict[str, str]]:
+def get_all_cities_list(
+    transport_type: Optional[str] = None,
+) -> List[Dict[str, str]]:
     """Get list of ALL cities with transit stations (no filtering).
 
     This is used when user wants to see more cities beyond the default filtered list.
+
+    Args:
+        transport_type: If given (one of the TRANSPORT_TYPE_* constants),
+            only cities with at least one station serving that transport type
+            are included, and station_count reflects only matching stations.
+            None (default) returns everything, unfiltered — same as before
+            this parameter existed.
 
     Returns:
         List of dictionaries with city info, sorted by Hebrew name
@@ -458,10 +538,14 @@ def get_all_cities_list() -> List[Dict[str, str]]:
 
     cities = []
     for city_id, city_data in cities_index.items():
-        station_count = len(city_data["stations"])
-
         # Skip "Other" category
         if city_id == "Other":
+            continue
+
+        stations = _filter_stations(city_data["stations"], transport_type)
+        station_count = len(stations)
+
+        if transport_type is not None and station_count == 0:
             continue
 
         city_name_he = city_data.get("name_he", "")
@@ -484,11 +568,17 @@ def get_all_cities_list() -> List[Dict[str, str]]:
     return cities
 
 
-def get_stations_for_city(city_id: str) -> List[Dict[str, str]]:
+def get_stations_for_city(
+    city_id: str, transport_type: Optional[str] = None
+) -> List[Dict[str, str]]:
     """Get all stations for a specific city.
 
     Args:
         city_id: City identifier (e.g., "Tel Aviv", "Jerusalem")
+        transport_type: If given (one of the TRANSPORT_TYPE_* constants),
+            only stations serving that transport type are returned. None
+            (default) returns everything, unfiltered — same as before this
+            parameter existed.
 
     Returns:
         List of dictionaries with station info, sorted by name
@@ -516,7 +606,7 @@ def get_stations_for_city(city_id: str) -> List[Dict[str, str]]:
         _LOGGER.warning(f"City '{city_id}' not found in GTFS index")
         return []
 
-    return cities_index[city_id]["stations"]
+    return _filter_stations(cities_index[city_id]["stations"], transport_type)
 
 
 def search_station_by_id(station_id: str) -> Optional[Dict]:
@@ -686,6 +776,7 @@ def get_cities_near_location(
     home_lon: float,
     max_distance_km: float = 30.0,
     max_cities: int = 10,
+    transport_type: Optional[str] = None,
 ) -> List[Dict[str, str]]:
     """Get cities within a certain distance from the given coordinates.
 
@@ -694,6 +785,11 @@ def get_cities_near_location(
         home_lon: Home longitude
         max_distance_km: Maximum distance in kilometers (default: 30km)
         max_cities: Maximum number of cities to return (default: 10)
+        transport_type: If given (one of the TRANSPORT_TYPE_* constants),
+            only stations serving that transport type are considered for
+            both the distance calculation and station_count. None (default)
+            considers all stations, unfiltered — same as before this
+            parameter existed.
 
     Returns:
         List of city dictionaries sorted by distance, closest first
@@ -709,7 +805,7 @@ def get_cities_near_location(
         if city_id == "Other":
             continue
 
-        stations = city_data.get("stations", [])
+        stations = _filter_stations(city_data.get("stations", []), transport_type)
         if not stations:
             continue
 
