@@ -6,7 +6,7 @@
 pytest
 pytest-asyncio
 pytest-cov
-pytest-homeassistant-custom-component>=0.13.356
+pytest-homeassistant-custom-component>=0.13.357
 aiohttp>=3.14.3
 israel-rail-api==0.1.5
 pre-commit>=4.6.2
