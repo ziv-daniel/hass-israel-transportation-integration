@@ -7,6 +7,7 @@ pytest
 pytest-asyncio
 pytest-cov
 pytest-homeassistant-custom-component>=0.13.365
+voluptuous-serialize  # imported directly by schema serialization tests
 aiohttp>=3.14.3
 israel-rail-api==0.1.5
 pre-commit>=4.6.2
