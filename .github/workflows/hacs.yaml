@@ -7,9 +7,13 @@ on:
     - cron: "0 0 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   validate:
-    runs-on: "ubuntu-latest"
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '"ubuntu-latest"' || '["self-hosted","linux","x64","homelab"]') }}
+    timeout-minutes: 30
     name: Validate
     steps:
       - name: "Check out repository"

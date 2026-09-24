@@ -14,7 +14,8 @@ permissions:
 
 jobs:
   update_release_draft:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '"ubuntu-latest"' || '["self-hosted","linux","x64","homelab"]') }}
+    timeout-minutes: 30
     steps:
       - name: "Run Release Drafter"
         uses: release-drafter/release-drafter@v7
