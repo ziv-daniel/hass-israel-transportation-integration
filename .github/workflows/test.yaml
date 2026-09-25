@@ -15,6 +15,9 @@ jobs:
   test:
     runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '"ubuntu-latest"' || '["self-hosted","linux","x64","homelab"]') }}
     timeout-minutes: 30
+    # The homelab runner host is Ubuntu 20.04, for which setup-python has no
+    # Python 3.14 build. Run the same Python image on hosted PRs and trusted pushes.
+    container: python:3.14-bookworm
     strategy:
       fail-fast: false
       matrix:
@@ -23,11 +26,6 @@ jobs:
     steps:
       - name: "Check out repository"
         uses: "actions/checkout@v7"
-
-      - name: "Set up Python ${{ matrix.python-version }}"
-        uses: "actions/setup-python@v7"
-        with:
-          python-version: ${{ matrix.python-version }}
 
       - name: "Install dependencies"
         run: |
@@ -45,14 +43,10 @@ jobs:
     runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '"ubuntu-latest"' || '["self-hosted","linux","x64","homelab"]') }}
     timeout-minutes: 30
     name: Quality checks (mypy + bandit)
+    container: python:3.14-bookworm
     steps:
       - name: "Check out repository"
         uses: "actions/checkout@v7"
-
-      - name: "Set up Python"
-        uses: "actions/setup-python@v7"
-        with:
-          python-version: "3.14"
 
       - name: "Install dependencies"
         run: |
