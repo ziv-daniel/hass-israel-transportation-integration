@@ -913,10 +913,10 @@ class TestFormSchemasSerialize:
 
     @staticmethod
     def _serialize(result):
-        import voluptuous_serialize
         from homeassistant.helpers import config_validation as cv
+        from probatio import to_field_list
 
-        return voluptuous_serialize.convert(
+        return to_field_list(
             result["data_schema"], custom_serializer=cv.custom_serializer
         )
 

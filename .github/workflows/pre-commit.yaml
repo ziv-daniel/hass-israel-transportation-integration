@@ -7,9 +7,13 @@ on:
       - main
       - master
 
+permissions:
+  contents: read
+
 jobs:
   pre-commit:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '"ubuntu-latest"' || '["self-hosted","linux","x64","homelab"]') }}
+    timeout-minutes: 30
     name: Run pre-commit checks
     steps:
       - name: "Check out repository"

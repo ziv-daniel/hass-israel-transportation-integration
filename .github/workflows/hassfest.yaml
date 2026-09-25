@@ -3,12 +3,17 @@ name: Validate with hassfest
 on:
   push:
   pull_request:
+  workflow_dispatch:
   schedule:
     - cron: "0 0 * * *"
 
+permissions:
+  contents: read
+
 jobs:
   validate:
-    runs-on: "ubuntu-latest"
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '"ubuntu-latest"' || '["self-hosted","linux","x64","homelab"]') }}
+    timeout-minutes: 30
     name: With hassfest
     steps:
       - name: "Check out repository"

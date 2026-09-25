@@ -8,9 +8,13 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '"ubuntu-latest"' || '["self-hosted","linux","x64","homelab"]') }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -38,7 +42,8 @@ jobs:
             --cov-fail-under=70
 
   quality:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(github.event_name == 'pull_request' && '"ubuntu-latest"' || '["self-hosted","linux","x64","homelab"]') }}
+    timeout-minutes: 30
     name: Quality checks (mypy + bandit)
     steps:
       - name: "Check out repository"
