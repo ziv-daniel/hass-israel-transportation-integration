@@ -12,4 +12,4 @@ israel-rail-api==0.1.5
 pre-commit>=4.7.0
 ruff>=0.17.5
 bandit[toml]>=1.9.4
-mypy>=2.4.0
+mypy>=2.4.1
