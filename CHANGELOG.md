@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- The config flow no longer reads the station index (`cities_index.json`, about 7.5 MB) on the event loop. This could happen on the city and station pickers after a background GTFS refresh cleared the cache. Every index lookup now runs in the executor (#68).
+
 ## [1.1.3] - 2026-08-21
 
 ### Fixed

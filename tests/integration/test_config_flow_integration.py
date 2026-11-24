@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -9,6 +11,7 @@ from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
+from custom_components.israel_transportation import gtfs_loader
 from custom_components.israel_transportation.api import (
     ApiTimeoutError,
 )
@@ -1578,3 +1581,75 @@ class TestOptionsFlowNoLines:
 
         assert result["type"] == FlowResultType.FORM
         assert result["errors"] == {"base": "no_lines"}
+
+
+class TestCitiesIndexOffEventLoop:
+    """hacs/default#10146 item 2 (#68): the cities index is never read on the loop.
+
+    The module cache is cleared before every step, as a background GTFS refresh
+    would, so each helper has to go to disk.
+    """
+
+    @pytest.fixture
+    def cold_cities_index(self, tmp_path):
+        """Real cities_index.json on disk; record the thread context of each read."""
+        (tmp_path / gtfs_loader.GTFS_ASSET_NAME).write_text(
+            json.dumps(
+                {
+                    "Testville": {
+                        "name": "Testville",
+                        "name_he": "טסטוויל",
+                        "stations": [
+                            {"id": "1", "name": "Main St", "lat": 32.0, "lon": 34.0}
+                        ],
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        real_load = gtfs_loader.load_cities_index
+        reads_on_loop: list[bool] = []
+
+        def _recording_load():
+            try:
+                asyncio.get_running_loop()
+                reads_on_loop.append(True)
+            except RuntimeError:
+                reads_on_loop.append(False)
+            return real_load()
+
+        with (
+            patch.object(gtfs_loader, "get_gtfs_data_path", return_value=tmp_path),
+            patch.object(gtfs_loader, "load_cities_index", side_effect=_recording_load),
+        ):
+            gtfs_loader._CITIES_INDEX_CACHE = None
+            yield reads_on_loop
+        gtfs_loader._CITIES_INDEX_CACHE = None
+
+    async def _configure_cold(self, hass: HomeAssistant, flow_id: str, data: dict):
+        gtfs_loader._CITIES_INDEX_CACHE = None
+        return await hass.config_entries.flow.async_configure(flow_id, data)
+
+    async def test_city_and_station_steps_read_index_in_executor(
+        self, hass: HomeAssistant, cold_cities_index
+    ):
+        """Selection, city list, all-cities list and station list never read on the loop."""
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        flow_id = result["flow_id"]
+        result = await self._configure_cold(
+            hass, flow_id, {CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS}
+        )
+        assert result["step_id"] == "station_selection_method"
+        result = await self._configure_cold(
+            hass, flow_id, {"selection_method": "city_dropdown"}
+        )
+        assert result["step_id"] == "select_city"
+        result = await self._configure_cold(hass, flow_id, {"city_id": "show_all"})
+        assert result["step_id"] == "select_city_all"
+        result = await self._configure_cold(hass, flow_id, {"city_id": "Testville"})
+        assert result["step_id"] == "select_station"
+
+        assert len(cold_cities_index) >= 4
+        assert not any(cold_cities_index)
