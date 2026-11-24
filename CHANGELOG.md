@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The config flow no longer reads the station index (`cities_index.json`, about 7.5 MB) on the event loop. This could happen on the city and station pickers after a background GTFS refresh cleared the cache. Every index lookup now runs in the executor (#68).
 - With two or more stations configured, the `update_lines` service rewrote the first station's lines no matter which sensor it targeted, and `refresh_data` with an `entity_id` always refreshed the first station. Both services now resolve the target through the entity registry and act only on that station. An entity that isn't an Israel Transportation sensor now gets a clear error (#69).
 - Configure (options) on a train route required bus lines, so changing the update interval or max arrivals meant typing fake lines, which were then stored on the entry. Train entries no longer show the lines field, and the dialog names the route ("From → To") instead of "Unknown" (#70).
+- The GTFS direction fallback no longer reads `routes_index.json.gz` on the event loop, which could stall Home Assistant for seconds. Each station's headsigns are loaded in the executor, only when the API leaves out a direction, and they're reloaded after a GTFS data refresh (#63).
 
 ## [1.1.3] - 2026-08-21
 

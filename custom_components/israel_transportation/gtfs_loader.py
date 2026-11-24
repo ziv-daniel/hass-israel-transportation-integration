@@ -11,7 +11,9 @@ import asyncio
 import gzip
 import json
 import logging
+import threading
 import time
+import zlib
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -27,6 +29,13 @@ _LOGGER = logging.getLogger(__name__)
 # Cache for loaded GTFS data
 _CITIES_INDEX_CACHE: Optional[Dict] = None
 _ROUTES_INDEX_CACHE: Optional[Dict] = None
+# Bumped whenever the routes index on disk is replaced, so callers holding data
+# derived from it (e.g. a coordinator's per-station headsigns) know to reload.
+_ROUTES_GENERATION = 0
+# Serialises the (~300 MB peak) routes-index parse: coordinators for several
+# config entries start concurrently in executor threads, and without this each
+# would parse its own copy of the file at the same time.
+_ROUTES_INDEX_LOCK = threading.Lock()
 
 # GitHub repository for downloading GTFS data
 GITHUB_REPO = "ziv-daniel/hass-israel-transportation-integration"
@@ -157,9 +166,10 @@ async def download_gtfs_data_from_release() -> bool:
         )
 
     # Invalidate in-memory caches so next load reads fresh data
-    global _CITIES_INDEX_CACHE, _ROUTES_INDEX_CACHE
+    global _CITIES_INDEX_CACHE, _ROUTES_INDEX_CACHE, _ROUTES_GENERATION
     _CITIES_INDEX_CACHE = None
     _ROUTES_INDEX_CACHE = None
+    _ROUTES_GENERATION += 1
 
     await asyncio.to_thread(_mark_gtfs_updated)
     return True
@@ -216,13 +226,23 @@ def load_routes_index() -> Dict:
         FileNotFoundError: If routes_index.json.gz doesn't exist
         json.JSONDecodeError: If JSON is malformed
     """
+    # Fast path without the lock; re-checked inside it.
+    cached = _ROUTES_INDEX_CACHE
+    if cached is not None:
+        return cached
+
+    with _ROUTES_INDEX_LOCK:
+        cached = _ROUTES_INDEX_CACHE
+        if cached is not None:
+            return cached
+        return _load_routes_index_file()
+
+
+def _load_routes_index_file() -> dict:
+    """Parse the routes index from disk and cache it. Caller holds the lock."""
     global _ROUTES_INDEX_CACHE
 
-    # Return cached data if available
-    if _ROUTES_INDEX_CACHE is not None:
-        return _ROUTES_INDEX_CACHE
-
-    # Load from file
+    generation = _ROUTES_GENERATION
     index_path = get_gtfs_data_path() / "routes_index.json.gz"
 
     if not index_path.exists():
@@ -237,61 +257,63 @@ def load_routes_index() -> Dict:
     try:
         # Read and decompress gzip file
         with gzip.open(index_path, "rt", encoding="utf-8") as f:
-            _ROUTES_INDEX_CACHE = json.load(f)
+            data: dict = json.load(f)
 
-        station_count = len(_ROUTES_INDEX_CACHE.get("stations", {}))
+        station_count = len(data.get("stations", {}))
         _LOGGER.info(f"Loaded routes data for {station_count:,} stations")
 
-        return _ROUTES_INDEX_CACHE
+        # A download that replaced the file mid-parse invalidated the cache;
+        # don't put the now-stale data back.
+        if generation == _ROUTES_GENERATION:
+            _ROUTES_INDEX_CACHE = data
+        return data
     except Exception as e:
         _LOGGER.error(f"Failed to load routes index: {e}")
         raise
 
 
-def get_route_headsign(station_id: str, route_number: str) -> Optional[str]:
-    """Get route headsign from GTFS data for a specific station and route.
+def routes_index_generation() -> int:
+    """Return a counter that changes whenever the routes index is refreshed."""
+    return _ROUTES_GENERATION
 
-    This provides a fallback when the real-time API doesn't return direction/headsign data.
+
+def _route_headsign(route: dict) -> Optional[str]:
+    """Return a route's display headsign: first trip headsign, else long name."""
+    trips = route.get("trips", [])
+    if trips:
+        trip_headsign = trips[0].get("trip_headsign", "").strip()
+        if trip_headsign:
+            return trip_headsign
+    return route.get("route_long_name", "").strip() or None
+
+
+def get_station_headsigns(station_id: str) -> dict[str, str]:
+    """Map each route number serving a station to its GTFS headsign.
+
+    Blocking (may decompress and parse the routes index): call it through
+    ``hass.async_add_executor_job``, never on the event loop.
 
     Args:
         station_id: Station ID (e.g., "12664")
-        route_number: Route/line number (e.g., "1", "5")
 
     Returns:
-        Headsign/direction string or None if not found
-
-    Example:
-        >>> get_route_headsign("12664", "1")
-        "Tel Aviv Central Station"
+        ``{route_short_name: headsign}``; empty if the index is unavailable
     """
     try:
         routes_data = load_routes_index()
-    except FileNotFoundError:
-        _LOGGER.debug("Routes index not available, cannot provide GTFS fallback")
-        return None
+    except (OSError, EOFError, ValueError, zlib.error) as err:
+        # Missing, truncated or corrupt index only loses the fallback ("Line N").
+        _LOGGER.debug("Routes index not available, no GTFS headsigns: %s", err)
+        return {}
 
-    # Get station routes
-    station_data = routes_data.get("stations", {}).get(station_id)
-    if not station_data:
-        return None
-
-    # Find matching route by route_short_name
+    station_data = routes_data.get("stations", {}).get(station_id) or {}
+    headsigns: dict[str, str] = {}
     for route in station_data.get("routes", []):
-        if route.get("route_short_name") == route_number:
-            # Prefer trip_headsign, fallback to route_long_name
-            trips = route.get("trips", [])
-            if trips:
-                # Get the first trip's headsign (most common)
-                trip_headsign = trips[0].get("trip_headsign", "").strip()
-                if trip_headsign:
-                    return trip_headsign
-
-            # Fallback to route long name
-            route_long_name = route.get("route_long_name", "").strip()
-            if route_long_name:
-                return route_long_name
-
-    return None
+        route_number = route.get("route_short_name")
+        headsign = _route_headsign(route)
+        if route_number and headsign and route_number not in headsigns:
+            headsigns[route_number] = headsign
+    return headsigns
 
 
 async def async_load_cities_index(hass=None) -> Dict:

@@ -9,7 +9,7 @@ trains now.
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.core import HomeAssistant
@@ -487,3 +487,94 @@ class TestGovIntervalAdjustment:
             timedelta(minutes=2),
             timedelta(minutes=5),
         )
+
+
+# ---------------------------------------------------------------------------
+# GTFS headsign fallback: loaded off the event loop (hacs/default#10146, #63)
+# ---------------------------------------------------------------------------
+
+_HEADSIGNS_TARGET = (
+    "custom_components.israel_transportation.coordinator.get_station_headsigns"
+)
+_GENERATION_TARGET = (
+    "custom_components.israel_transportation.coordinator.routes_index_generation"
+)
+
+
+class TestGtfsHeadsignFallback:
+    """The routes index is only ever read in the executor, and only when needed."""
+
+    async def test_cold_load_runs_in_executor(
+        self, hass: HomeAssistant, simple_mock_config_entry
+    ):
+        """A missing direction loads headsigns via the executor, not inline."""
+        mock_gov = MagicMock()
+        mock_gov.get_arrivals = AsyncMock(return_value=GOV_ARRIVALS_NO_DIRECTION)
+        coordinator = _make_gov_coordinator(
+            hass, simple_mock_config_entry, mock_gov, bus_lines=["7"]
+        )
+
+        with (
+            patch(_HEADSIGNS_TARGET, return_value={"7": "Central Station"}) as load,
+            patch.object(
+                hass, "async_add_executor_job", wraps=hass.async_add_executor_job
+            ) as executor,
+        ):
+            await coordinator.async_refresh()
+
+        executor.assert_called_once_with(load, "24068")
+        load.assert_called_once_with("24068")
+        assert coordinator.data["7"][0]["direction"] == "Central Station"
+
+    async def test_not_loaded_when_api_has_directions(
+        self, hass: HomeAssistant, simple_mock_config_entry
+    ):
+        """If every arrival has a direction the index is never touched."""
+        mock_gov = MagicMock()
+        mock_gov.get_arrivals = AsyncMock(return_value=GOV_ARRIVALS_STANDARD)
+        coordinator = _make_gov_coordinator(hass, simple_mock_config_entry, mock_gov)
+
+        with patch(_HEADSIGNS_TARGET) as load:
+            await coordinator.async_refresh()
+
+        load.assert_not_called()
+
+    async def test_loaded_once_then_reloaded_after_refresh(
+        self, hass: HomeAssistant, simple_mock_config_entry
+    ):
+        """Headsigns are cached per index generation and reloaded when it changes."""
+        mock_gov = MagicMock()
+        mock_gov.get_arrivals = AsyncMock(return_value=GOV_ARRIVALS_NO_DIRECTION)
+        coordinator = _make_gov_coordinator(
+            hass, simple_mock_config_entry, mock_gov, bus_lines=["7"]
+        )
+
+        with (
+            patch(_HEADSIGNS_TARGET, side_effect=[{"7": "Old"}, {"7": "New"}]) as load,
+            patch(_GENERATION_TARGET, return_value=0) as generation,
+        ):
+            await coordinator.async_refresh()
+            await coordinator.async_refresh()
+            assert load.call_count == 1
+            assert coordinator.data["7"][0]["direction"] == "Old"
+
+            generation.return_value = 1
+            await coordinator.async_refresh()
+
+        assert load.call_count == 2
+        assert coordinator.data["7"][0]["direction"] == "New"
+
+    async def test_missing_headsign_falls_back_to_line_number(
+        self, hass: HomeAssistant, simple_mock_config_entry
+    ):
+        """No GTFS headsign for the line → 'Line N', as before."""
+        mock_gov = MagicMock()
+        mock_gov.get_arrivals = AsyncMock(return_value=GOV_ARRIVALS_NO_DIRECTION)
+        coordinator = _make_gov_coordinator(
+            hass, simple_mock_config_entry, mock_gov, bus_lines=["7"]
+        )
+
+        with patch(_HEADSIGNS_TARGET, return_value={"99": "Elsewhere"}):
+            await coordinator.async_refresh()
+
+        assert coordinator.data["7"][0]["direction"] == "Line 7"
