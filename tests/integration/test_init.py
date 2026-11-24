@@ -9,6 +9,8 @@ import pytest
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import ATTR_ENTITY_ID
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.israel_transportation import (
@@ -21,6 +23,8 @@ from custom_components.israel_transportation.const import (
     CONF_FROM_STATION,
     CONF_FROM_STATION_NAME,
     CONF_MAX_ARRIVALS,
+    CONF_STATION_ID,
+    CONF_STATION_NAME,
     CONF_TO_STATION,
     CONF_TO_STATION_NAME,
     CONF_TRANSPORT_TYPE,
@@ -28,6 +32,7 @@ from custom_components.israel_transportation.const import (
     DEFAULT_MAX_ARRIVALS,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    TRANSPORT_TYPE_BUS,
     TRANSPORT_TYPE_TRAIN,
 )
 
@@ -166,93 +171,170 @@ async def test_options_update_triggers_reload(hass: HomeAssistant, setup_integra
     assert entry.state == ConfigEntryState.LOADED
 
 
-@pytest.mark.asyncio
-async def test_refresh_data_service_refreshes_all_coordinators(
-    hass: HomeAssistant, setup_integration
-):
-    """refresh_data with no entity_id target refreshes every coordinator."""
-    entry = setup_integration
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-
-    with patch.object(
-        coordinator, "async_request_refresh", wraps=coordinator.async_request_refresh
-    ) as mock_refresh:
-        await hass.services.async_call(DOMAIN, SERVICE_REFRESH_DATA, {}, blocking=True)
+async def _setup_station(
+    hass: HomeAssistant, gov_client, station_id: str, station_name: str
+) -> MockConfigEntry:
+    """Set up one bus station entry and return it."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS,
+            CONF_STATION_ID: station_id,
+            CONF_STATION_NAME: station_name,
+            CONF_BUS_LINES: ["249", "40"],
+            CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
+            CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
+        },
+        unique_id=station_id,
+    )
+    entry.add_to_hass(hass)
+    with patch(
+        "custom_components.israel_transportation.GovApiClient",
+        return_value=gov_client,
+    ):
+        await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
+    return entry
 
-    mock_refresh.assert_awaited()
+
+def _entity_ids(hass: HomeAssistant, entry: MockConfigEntry) -> list[str]:
+    """Sensor entity ids registered for a config entry."""
+    registry = er.async_get(hass)
+    return [
+        e.entity_id for e in er.async_entries_for_config_entry(registry, entry.entry_id)
+    ]
+
+
+def _coordinator(hass: HomeAssistant, entry: MockConfigEntry):
+    return hass.data[DOMAIN][entry.entry_id]["coordinator"]
+
+
+@pytest.fixture
+async def two_stations(hass: HomeAssistant, mock_gov_api_client):
+    """Two configured bus stations (hacs/default#10146 item 3)."""
+    station_a = await _setup_station(hass, mock_gov_api_client, "24068", "Station A")
+    station_b = await _setup_station(hass, mock_gov_api_client, "12664", "Station B")
+    assert _entity_ids(hass, station_a) and _entity_ids(hass, station_b)
+    return station_a, station_b
 
 
 @pytest.mark.asyncio
-async def test_refresh_data_service_with_entity_id(
-    hass: HomeAssistant, setup_integration
+async def test_refresh_data_without_target_refreshes_every_station(
+    hass: HomeAssistant, two_stations
 ):
-    """refresh_data targeted at an entity_id still refreshes a coordinator."""
-    entry = setup_integration
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    """refresh_data with no entity_id refreshes every coordinator once."""
+    station_a, station_b = two_stations
+    with (
+        patch.object(_coordinator(hass, station_a), "async_request_refresh") as a,
+        patch.object(_coordinator(hass, station_b), "async_request_refresh") as b,
+    ):
+        await hass.services.async_call(DOMAIN, SERVICE_REFRESH_DATA, {}, blocking=True)
 
-    with patch.object(
-        coordinator, "async_request_refresh", wraps=coordinator.async_request_refresh
-    ) as mock_refresh:
+    a.assert_awaited_once()
+    b.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_refresh_data_refreshes_only_the_targeted_station(
+    hass: HomeAssistant, two_stations
+):
+    """Targeting station B's sensors refreshes B once and leaves A alone."""
+    station_a, station_b = two_stations
+    with (
+        patch.object(_coordinator(hass, station_a), "async_request_refresh") as a,
+        patch.object(_coordinator(hass, station_b), "async_request_refresh") as b,
+    ):
         await hass.services.async_call(
             DOMAIN,
             SERVICE_REFRESH_DATA,
-            {ATTR_ENTITY_ID: ["sensor.dummy"]},
+            {ATTR_ENTITY_ID: _entity_ids(hass, station_b)},
             blocking=True,
         )
-        await hass.async_block_till_done()
 
-    mock_refresh.assert_awaited()
+    a.assert_not_awaited()
+    b.assert_awaited_once()
 
 
 @pytest.mark.asyncio
-async def test_update_lines_service_updates_coordinator_and_entry(
-    hass: HomeAssistant, setup_integration
+async def test_refresh_data_rejects_unknown_entity(hass: HomeAssistant, two_stations):
+    """An entity that is not ours raises a translated validation error."""
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_REFRESH_DATA,
+            {ATTR_ENTITY_ID: ["sensor.not_ours"]},
+            blocking=True,
+        )
+    assert err.value.translation_key == "unknown_entity"
+
+
+@pytest.mark.asyncio
+async def test_update_lines_changes_only_the_targeted_station(
+    hass: HomeAssistant, two_stations
 ):
-    """update_lines should update the coordinator and persist the new lines."""
-    entry = setup_integration
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
+    """update_lines on station B rewrites B's lines and leaves A untouched."""
+    station_a, station_b = two_stations
+    lines_a = list(station_a.data[CONF_BUS_LINES])
 
     await hass.services.async_call(
         DOMAIN,
         SERVICE_UPDATE_LINES,
-        {ATTR_ENTITY_ID: "sensor.dummy", "lines": "101, 102 ,103"},
+        {ATTR_ENTITY_ID: _entity_ids(hass, station_b)[0], "lines": "101, 102 ,103"},
         blocking=True,
     )
     await hass.async_block_till_done()
 
-    assert coordinator.bus_lines == ["101", "102", "103"]
+    assert hass.config_entries.async_get_entry(station_b.entry_id).data[
+        CONF_BUS_LINES
+    ] == ["101", "102", "103"]
+    assert _coordinator(hass, station_b).bus_lines == ["101", "102", "103"]
+    assert (
+        hass.config_entries.async_get_entry(station_a.entry_id).data[CONF_BUS_LINES]
+        == lines_a
+    )
+    assert _coordinator(hass, station_a).bus_lines == lines_a
 
-    updated_entry = hass.config_entries.async_get_entry(entry.entry_id)
-    assert updated_entry.data[CONF_BUS_LINES] == ["101", "102", "103"]
+
+@pytest.mark.asyncio
+async def test_update_lines_rejects_unknown_entity(hass: HomeAssistant, two_stations):
+    """update_lines with an entity that is not ours raises and changes nothing."""
+    station_a, _ = two_stations
+    lines_a = list(station_a.data[CONF_BUS_LINES])
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_UPDATE_LINES,
+            {ATTR_ENTITY_ID: "sensor.not_ours", "lines": "1"},
+            blocking=True,
+        )
+
+    assert _coordinator(hass, station_a).bus_lines == lines_a
 
 
 @pytest.mark.asyncio
 async def test_update_lines_service_ignores_blank_lines(
-    hass: HomeAssistant, setup_integration, caplog
+    hass: HomeAssistant, two_stations, caplog
 ):
     """update_lines with no valid line numbers should warn and leave state unchanged."""
-    entry = setup_integration
-    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    original_lines = list(coordinator.bus_lines)
+    station_a, _ = two_stations
+    original_lines = list(_coordinator(hass, station_a).bus_lines)
 
     await hass.services.async_call(
         DOMAIN,
         SERVICE_UPDATE_LINES,
-        {ATTR_ENTITY_ID: "sensor.dummy", "lines": " , , "},
+        {ATTR_ENTITY_ID: _entity_ids(hass, station_a)[0], "lines": " , , "},
         blocking=True,
     )
     await hass.async_block_till_done()
 
-    assert coordinator.bus_lines == original_lines
+    assert _coordinator(hass, station_a).bus_lines == original_lines
     assert "No valid lines provided" in caplog.text
 
 
 @pytest.mark.asyncio
-async def test_update_lines_service_skips_train_coordinators(
-    hass: HomeAssistant, caplog
-):
-    """update_lines is bus/light-rail only; a train coordinator must be skipped."""
+async def test_update_lines_service_rejects_train_entity(hass: HomeAssistant, caplog):
+    """update_lines is bus/light-rail only; a train entity is left unchanged."""
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={
@@ -277,9 +359,12 @@ async def test_update_lines_service_skips_train_coordinators(
     await hass.services.async_call(
         DOMAIN,
         SERVICE_UPDATE_LINES,
-        {ATTR_ENTITY_ID: "sensor.dummy", "lines": "101"},
+        {ATTR_ENTITY_ID: _entity_ids(hass, entry)[0], "lines": "101"},
         blocking=True,
     )
     await hass.async_block_till_done()
 
     assert "Cannot update lines for train routes" in caplog.text
+    assert (
+        CONF_BUS_LINES not in hass.config_entries.async_get_entry(entry.entry_id).data
+    )

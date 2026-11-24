@@ -126,5 +126,10 @@
     "error": {
       "no_lines": "אנא הזן לפחות מספר קו אחד."
     }
+  },
+  "exceptions": {
+    "unknown_entity": {
+      "message": "הישות {entity_id} אינה חיישן של Israel Transportation."
+    }
   }
 }

@@ -10,8 +10,9 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_ENTITY_ID, Platform
 from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryNotReady, ServiceValidationError
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import ApiConnectionError
@@ -246,82 +247,67 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
 
 
-async def async_handle_refresh_data(call: ServiceCall) -> None:
-    """Handle the refresh_data service call.
+def _entry_ids_for_entities(hass: HomeAssistant, entity_ids: list[str]) -> list[str]:
+    """Resolve entity ids to this integration's loaded config entry ids.
 
-    Args:
-        call: Service call data
+    Order is kept and duplicates dropped, so several sensors of one station
+    map to a single entry.
+
+    Raises:
+        ServiceValidationError: an entity is unknown or not one of ours
     """
+    registry = er.async_get(hass)
+    loaded = hass.data.get(DOMAIN, {})
+    entry_ids: list[str] = []
+    for entity_id in entity_ids:
+        entity = registry.async_get(entity_id)
+        entry_id = (
+            entity.config_entry_id if entity and entity.platform == DOMAIN else None
+        )
+        if entry_id is None or entry_id not in loaded:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="unknown_entity",
+                translation_placeholders={"entity_id": entity_id},
+            )
+        if entry_id not in entry_ids:
+            entry_ids.append(entry_id)
+    return entry_ids
+
+
+async def async_handle_refresh_data(call: ServiceCall) -> None:
+    """Refresh the targeted stations, or every station when none is given."""
     hass = call.hass
     entity_ids = call.data.get(ATTR_ENTITY_ID)
+    if entity_ids:
+        entry_ids = _entry_ids_for_entities(hass, entity_ids)
+    else:
+        entry_ids = list(hass.data.get(DOMAIN, {}))
 
-    # If no entity IDs specified, refresh all coordinators
-    if not entity_ids:
-        for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
-            coordinator = entry_data.get("coordinator")
-            if coordinator:
-                _LOGGER.info("Refreshing data for coordinator %s", entry_id)
-                await coordinator.async_request_refresh()
-        return
-
-    # Refresh specific entities
-    for entity_id in entity_ids:
-        # Find the coordinator for this entity
-        for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
-            coordinator = entry_data.get("coordinator")
-            if coordinator:
-                _LOGGER.info("Refreshing data for entity %s", entity_id)
-                await coordinator.async_request_refresh()
-                break
+    for entry_id in entry_ids:
+        _LOGGER.info("Refreshing data for config entry %s", entry_id)
+        await hass.data[DOMAIN][entry_id]["coordinator"].async_request_refresh()
 
 
 async def async_handle_update_lines(call: ServiceCall) -> None:
-    """Handle the update_lines service call.
-
-    Args:
-        call: Service call data
-    """
+    """Replace the tracked lines of the station the target entity belongs to."""
     hass = call.hass
     entity_id = call.data[ATTR_ENTITY_ID]
-    lines_str = call.data["lines"]
-
-    # Parse lines (comma-separated)
-    new_lines = [line.strip() for line in lines_str.split(",") if line.strip()]
-
+    new_lines = [line.strip() for line in call.data["lines"].split(",") if line.strip()]
     if not new_lines:
         _LOGGER.warning("No valid lines provided for update_lines service")
         return
 
-    # Find the config entry for this entity
-    for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
-        coordinator: SilentBusCoordinator = entry_data.get("coordinator")
-        if not coordinator:
-            continue
+    (entry_id,) = _entry_ids_for_entities(hass, [entity_id])
+    coordinator: SilentBusCoordinator = hass.data[DOMAIN][entry_id]["coordinator"]
+    if coordinator.transport_type == TRANSPORT_TYPE_TRAIN:
+        _LOGGER.warning("Cannot update lines for train routes (%s)", entity_id)
+        return
 
-        # Only update for bus/light rail (not trains)
-        if coordinator.transport_type == TRANSPORT_TYPE_TRAIN:
-            _LOGGER.warning("Cannot update lines for train routes")
-            continue
-
-        # Update the coordinator's bus_lines
-        coordinator.bus_lines = new_lines
-
-        # Get the config entry and update it
-        entry = hass.config_entries.async_get_entry(entry_id)
-        if entry:
-            # Create new data dict with updated lines
-            new_data = dict(entry.data)
-            new_data[CONF_BUS_LINES] = new_lines
-
-            # Update the config entry
-            hass.config_entries.async_update_entry(entry, data=new_data)
-
-            _LOGGER.info(
-                "Updated lines for entity %s to: %s",
-                entity_id,
-                new_lines,
-            )
-
-            # Trigger a refresh to get new data
-            await coordinator.async_request_refresh()
-            break
+    entry = hass.config_entries.async_get_known_entry(entry_id)
+    coordinator.bus_lines = new_lines
+    hass.config_entries.async_update_entry(
+        entry, data={**entry.data, CONF_BUS_LINES: new_lines}
+    )
+    _LOGGER.info("Updated lines for entity %s to: %s", entity_id, new_lines)
+    await coordinator.async_request_refresh()
