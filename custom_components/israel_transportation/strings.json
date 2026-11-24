@@ -126,5 +126,10 @@
     "error": {
       "no_lines": "Please enter at least one bus line number."
     }
+  },
+  "exceptions": {
+    "unknown_entity": {
+      "message": "Entity {entity_id} is not an Israel Transportation sensor."
+    }
   }
 }
