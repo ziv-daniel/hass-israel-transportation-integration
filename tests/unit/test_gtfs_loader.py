@@ -8,6 +8,9 @@ tag on each station is produced, and _station_matches_transport_type in
 gtfs_loader.py for how it's consumed.
 """
 
+import gzip
+import json
+import threading
 from unittest.mock import patch
 
 import pytest
@@ -241,3 +244,150 @@ class TestGetCitiesNearLocation:
         cities = gtfs_loader.get_cities_near_location(32.0, 34.0, max_distance_km=9999)
         city_ids = {c["id"] for c in cities}
         assert city_ids == {"Testville", "OtherCity"}
+
+
+# Captured at import, before conftest's autouse fixture replaces it with a mock.
+_REAL_DOWNLOAD = gtfs_loader.download_gtfs_data_from_release
+
+
+class TestGetStationHeadsigns:
+    """Per-station headsign map read from routes_index.json.gz (#63)."""
+
+    @pytest.fixture
+    def routes_dir(self, tmp_path):
+        """Point gtfs_loader at a temp dir and reset the routes cache."""
+        gtfs_loader._ROUTES_INDEX_CACHE = None
+        with patch.object(gtfs_loader, "get_gtfs_data_path", return_value=tmp_path):
+            yield tmp_path
+        gtfs_loader._ROUTES_INDEX_CACHE = None
+
+    @staticmethod
+    def _write_index(directory, stations):
+        with gzip.open(
+            directory / gtfs_loader.ROUTES_ASSET_NAME, "wt", encoding="utf-8"
+        ) as f:
+            json.dump({"stations": stations}, f)
+
+    def test_maps_route_numbers_to_headsigns(self, routes_dir):
+        """Trip headsign wins, long name is the fallback, the first route per number wins."""
+        self._write_index(
+            routes_dir,
+            {
+                "100": {
+                    "routes": [
+                        {
+                            "route_short_name": "1",
+                            "trips": [{"trip_headsign": "North"}],
+                        },
+                        {
+                            "route_short_name": "1",
+                            "trips": [{"trip_headsign": "South"}],
+                        },
+                        {
+                            "route_short_name": "2",
+                            "trips": [],
+                            "route_long_name": "Ring",
+                        },
+                        {"route_short_name": "3", "trips": [{"trip_headsign": " "}]},
+                    ]
+                }
+            },
+        )
+
+        assert gtfs_loader.get_station_headsigns("100") == {"1": "North", "2": "Ring"}
+        assert gtfs_loader.get_station_headsigns("unknown") == {}
+
+    def test_missing_index_returns_empty(self, routes_dir):
+        """No routes index on disk → empty map, no exception."""
+        assert gtfs_loader.get_station_headsigns("100") == {}
+
+    def test_corrupt_index_returns_empty(self, routes_dir):
+        """A non-gzip index → empty map, no exception."""
+        (routes_dir / gtfs_loader.ROUTES_ASSET_NAME).write_bytes(b"not gzip")
+
+        assert gtfs_loader.get_station_headsigns("100") == {}
+
+    def test_truncated_index_returns_empty(self, routes_dir):
+        """A truncated gzip (EOFError) → empty map, no exception."""
+        payload = gzip.compress(json.dumps({"stations": {"100": {}}}).encode())
+        (routes_dir / gtfs_loader.ROUTES_ASSET_NAME).write_bytes(payload[:-10])
+
+        assert gtfs_loader.get_station_headsigns("100") == {}
+
+    def test_damaged_deflate_stream_returns_empty(self, routes_dir):
+        """Corruption inside the deflate stream (zlib.error) → empty map."""
+        payload = bytearray(
+            gzip.compress(
+                json.dumps(
+                    {"stations": {str(i): {"routes": []} for i in range(2000)}}
+                ).encode()
+            )
+        )
+        payload[20] ^= 0xFF
+        (routes_dir / gtfs_loader.ROUTES_ASSET_NAME).write_bytes(bytes(payload))
+
+        assert gtfs_loader.get_station_headsigns("100") == {}
+
+    def test_concurrent_cold_loads_parse_once(self, routes_dir):
+        """Threads racing on a cold cache share a single parse."""
+        self._write_index(routes_dir, {"100": {"routes": []}})
+        real_load = json.load
+        calls = []
+        started = threading.Event()
+        release = threading.Event()
+
+        def _slow_load(fp):
+            calls.append(1)
+            started.set()
+            release.wait(5)
+            return real_load(fp)
+
+        results = []
+        with patch.object(gtfs_loader.json, "load", side_effect=_slow_load):
+            threads = [
+                threading.Thread(
+                    target=lambda: results.append(gtfs_loader.load_routes_index())
+                )
+                for _ in range(4)
+            ]
+            for thread in threads:
+                thread.start()
+            assert started.wait(5)
+            release.set()
+            for thread in threads:
+                thread.join(5)
+
+        assert len(calls) == 1
+        assert len(results) == 4
+        assert all(result is results[0] for result in results)
+
+    def test_load_racing_download_is_not_cached(self, routes_dir):
+        """A parse that a GTFS download overtook returns data but doesn't cache it."""
+        self._write_index(routes_dir, {"100": {"routes": []}})
+        real_load = json.load
+
+        def _load_then_refresh(fp):
+            data = real_load(fp)
+            gtfs_loader._ROUTES_GENERATION += 1
+            return data
+
+        with patch.object(gtfs_loader.json, "load", side_effect=_load_then_refresh):
+            assert "100" in gtfs_loader.load_routes_index()["stations"]
+
+        assert gtfs_loader._ROUTES_INDEX_CACHE is None
+
+    async def test_download_bumps_generation(self, routes_dir):
+        """A successful GTFS refresh changes the generation so callers reload."""
+        before = gtfs_loader.routes_index_generation()
+
+        async def _fake_download(_session, _asset, path):
+            path.write_text(json.dumps({}), encoding="utf-8")
+            return True
+
+        with (
+            patch.object(gtfs_loader, "_download_asset", side_effect=_fake_download),
+            patch.object(gtfs_loader, "_mark_gtfs_updated"),
+        ):
+            assert await _REAL_DOWNLOAD() is True
+
+        assert gtfs_loader.routes_index_generation() == before + 1

@@ -72,8 +72,8 @@ def mock_gtfs_functions():
     """
     with (
         patch(
-            "custom_components.israel_transportation.coordinator.get_route_headsign",
-            return_value=None,
+            "custom_components.israel_transportation.coordinator.get_station_headsigns",
+            return_value={},
         ),
         patch(
             "custom_components.israel_transportation.gtfs_loader._gtfs_is_stale",

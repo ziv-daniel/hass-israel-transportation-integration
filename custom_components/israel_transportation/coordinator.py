@@ -14,7 +14,7 @@ from israelrailapi.api import GetRoutesApi
 
 from .api import BusNearbyApiClient, BusNearbyApiError
 from .gov_api import GovApiClient, RateLimitError
-from .gtfs_loader import get_route_headsign
+from .gtfs_loader import get_station_headsigns, routes_index_generation
 from .const import (
     APPROACHING_THRESHOLD,
     DEFAULT_MAX_ARRIVALS,
@@ -100,8 +100,10 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         else:
             self._station_display = None
 
-        # GTFS direction cache for fallback when API doesn't provide direction
-        self._gtfs_direction_cache: dict[tuple[str, str], Optional[str]] = {}
+        # GTFS headsigns for this station, used when the API omits a direction.
+        # Loaded in the executor on demand; reloaded when the index is refreshed.
+        self._station_headsigns: dict[str, str] = {}
+        self._headsigns_generation: Optional[int] = None
 
         # Generate unique coordinator name
         if transport_type == TRANSPORT_TYPE_TRAIN:
@@ -189,6 +191,9 @@ class SilentBusCoordinator(DataUpdateCoordinator):
                         self._station_display,
                     )
 
+                    await self._async_ensure_headsigns(
+                        arrivals or [], ("headsign", "tripHeadsign")
+                    )
                     processed_data = self._process_arrivals(arrivals)
 
                     _LOGGER.debug(
@@ -232,6 +237,40 @@ class SilentBusCoordinator(DataUpdateCoordinator):
         except Exception as err:
             raise UpdateFailed(f"Unexpected error fetching data: {err}") from err
 
+    async def _async_ensure_headsigns(
+        self, arrivals: list[dict[str, Any]], direction_keys: tuple[str, ...]
+    ) -> None:
+        """Load this station's GTFS headsigns if an arrival lacks a direction.
+
+        The routes index is large (tens of MB once decompressed), so it is read
+        only when needed, only in the executor, and again only after a refresh.
+        """
+        generation = routes_index_generation()
+        if self._headsigns_generation == generation:
+            return
+        if all(
+            any((arrival.get(key) or "").strip() for key in direction_keys)
+            for arrival in arrivals
+        ):
+            return
+        self._station_headsigns = await self.hass.async_add_executor_job(
+            get_station_headsigns, self.station_id
+        )
+        self._headsigns_generation = generation
+
+    def _fallback_direction(self, line_number: str) -> str:
+        """Direction for a line the API returned without one: GTFS, else 'Line N'."""
+        headsign = self._station_headsigns.get(line_number)
+        if headsign:
+            _LOGGER.debug(
+                "Station %s, line %s: using GTFS fallback direction: %s",
+                self.station_id,
+                line_number,
+                headsign,
+            )
+            return headsign
+        return f"Line {line_number}"
+
     def _process_arrivals(self, arrivals: list[dict[str, Any]]) -> dict[str, Any]:
         """Process raw arrival data into structured format.
 
@@ -273,24 +312,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             direction = headsign or trip_headsign
 
             # Fallback chain: API → GTFS → Line number
-            if not direction:
-                cache_key = (self.station_id, line_number)
-                if cache_key in self._gtfs_direction_cache:
-                    direction = (
-                        self._gtfs_direction_cache[cache_key] or f"Line {line_number}"
-                    )
-                else:
-                    gtfs_direction = get_route_headsign(self.station_id, line_number)
-                    self._gtfs_direction_cache[cache_key] = gtfs_direction
-                    direction = gtfs_direction or f"Line {line_number}"
-
-                    if gtfs_direction:
-                        _LOGGER.debug(
-                            "Station %s, line %s: Using GTFS fallback direction: %s",
-                            self.station_id,
-                            line_number,
-                            direction,
-                        )
+            direction = direction or self._fallback_direction(line_number)
 
             # Create processed arrival entry
             processed_arrival = {
@@ -475,6 +497,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             self._station_display,
         )
 
+        await self._async_ensure_headsigns(arrivals or [], ("direction",))
         return self._process_gov_arrivals(arrivals)
 
     def _process_gov_arrivals(self, arrivals: list[dict[str, Any]]) -> dict[str, Any]:
@@ -499,33 +522,7 @@ class SilentBusCoordinator(DataUpdateCoordinator):
             operator = arrival.get("operator") or ""
 
             # Fallback chain: API → GTFS → Line number
-            if not direction:
-                # Check cache first
-                cache_key = (self.station_id, line_number)
-                if cache_key in self._gtfs_direction_cache:
-                    direction = (
-                        self._gtfs_direction_cache[cache_key] or f"Line {line_number}"
-                    )
-                else:
-                    # Try GTFS fallback
-                    gtfs_direction = get_route_headsign(self.station_id, line_number)
-                    self._gtfs_direction_cache[cache_key] = gtfs_direction
-
-                    if gtfs_direction:
-                        direction = gtfs_direction
-                        _LOGGER.debug(
-                            "Station %s, line %s: Using GTFS fallback direction: %s",
-                            self.station_id,
-                            line_number,
-                            direction,
-                        )
-                    else:
-                        direction = f"Line {line_number}"
-                        _LOGGER.debug(
-                            "Station %s, line %s: No GTFS data, using line number fallback",
-                            self.station_id,
-                            line_number,
-                        )
+            direction = direction or self._fallback_direction(line_number)
 
             # Create arrival entries for each upcoming arrival
             now = dt_util.now()
