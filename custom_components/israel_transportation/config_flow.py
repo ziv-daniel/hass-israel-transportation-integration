@@ -1030,12 +1030,7 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            bus_lines_input = user_input[CONF_BUS_LINES].strip()
-
-            # Parse bus lines (comma-separated)
-            bus_lines = [
-                line.strip() for line in bus_lines_input.split(",") if line.strip()
-            ]
+            bus_lines = _parse_bus_lines(user_input[CONF_BUS_LINES])
 
             if not bus_lines:
                 errors["base"] = "no_lines"
@@ -1110,86 +1105,75 @@ class SilentBusOptionsFlow(config_entries.OptionsFlow):
         """Return the config entry."""
         return self._config_entry
 
+    @property
+    def _is_train(self) -> bool:
+        """Train entries have no bus lines to edit."""
+        return self.config_entry.data.get(CONF_TRANSPORT_TYPE) == TRANSPORT_TYPE_TRAIN
+
     async def async_step_init(
         self, user_input: Optional[dict[str, Any]] = None
     ) -> FlowResult:
-        """Manage the options.
-
-        Args:
-            user_input: User input data
-
-        Returns:
-            Flow result
-        """
+        """Edit update interval, max arrivals and (bus/light rail only) lines."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Parse bus lines
-            bus_lines_input = user_input[CONF_BUS_LINES].strip()
-            bus_lines = [
-                line.strip() for line in bus_lines_input.split(",") if line.strip()
-            ]
-
-            if not bus_lines:
-                errors["base"] = "no_lines"
-            else:
-                # Update the config entry
-                new_data = {
-                    **self.config_entry.data,
-                    CONF_BUS_LINES: bus_lines,
-                    CONF_UPDATE_INTERVAL: user_input[CONF_UPDATE_INTERVAL],
-                    CONF_MAX_ARRIVALS: user_input[CONF_MAX_ARRIVALS],
-                }
-
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry,
-                    data=new_data,
-                )
-
-                return self.async_create_entry(title="", data={})
-
-        # Get current values
-        current_lines = self.config_entry.data.get(CONF_BUS_LINES, [])
-        current_interval = self.config_entry.data.get(
-            CONF_UPDATE_INTERVAL,
-            DEFAULT_SCAN_INTERVAL.total_seconds(),
-        )
-        current_max_arrivals = self.config_entry.data.get(
-            CONF_MAX_ARRIVALS,
-            DEFAULT_MAX_ARRIVALS,
-        )
-
-        # Show form
-        data_schema = vol.Schema(
-            {
-                vol.Required(
-                    CONF_BUS_LINES,
-                    default=", ".join(current_lines),
-                ): str,
-                vol.Required(
-                    CONF_UPDATE_INTERVAL,
-                    default=current_interval,
-                ): vol.All(
-                    vol.Coerce(int),
-                    vol.Range(
-                        min=MIN_SCAN_INTERVAL.total_seconds(),
-                        max=MAX_SCAN_INTERVAL.total_seconds(),
-                    ),
-                ),
-                vol.Required(
-                    CONF_MAX_ARRIVALS,
-                    default=current_max_arrivals,
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=10)),
+            new_data = {
+                **self.config_entry.data,
+                CONF_UPDATE_INTERVAL: user_input[CONF_UPDATE_INTERVAL],
+                CONF_MAX_ARRIVALS: user_input[CONF_MAX_ARRIVALS],
             }
-        )
+            if not self._is_train:
+                bus_lines = _parse_bus_lines(user_input[CONF_BUS_LINES])
+                new_data[CONF_BUS_LINES] = bus_lines
+                if not bus_lines:
+                    errors["base"] = "no_lines"
+            if not errors:
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, data=new_data
+                )
+                return self.async_create_entry(title="", data={})
 
         return self.async_show_form(
             step_id="init",
-            data_schema=data_schema,
+            data_schema=self._options_schema(),
             errors=errors,
-            description_placeholders={
-                "station_name": self.config_entry.data.get(
-                    CONF_STATION_NAME, "Unknown"
-                ),
-            },
+            description_placeholders={"station_name": self._entry_display_name()},
         )
+
+    def _options_schema(self) -> vol.Schema:
+        """Options form; the bus-lines field is left out for train entries."""
+        data = self.config_entry.data
+        fields: dict[Any, Any] = {}
+        if not self._is_train:
+            current_lines = ", ".join(data.get(CONF_BUS_LINES, []))
+            fields[vol.Required(CONF_BUS_LINES, default=current_lines)] = str
+        interval_default = data.get(
+            CONF_UPDATE_INTERVAL, DEFAULT_SCAN_INTERVAL.total_seconds()
+        )
+        fields[vol.Required(CONF_UPDATE_INTERVAL, default=interval_default)] = vol.All(
+            vol.Coerce(int),
+            vol.Range(
+                min=MIN_SCAN_INTERVAL.total_seconds(),
+                max=MAX_SCAN_INTERVAL.total_seconds(),
+            ),
+        )
+        max_default = data.get(CONF_MAX_ARRIVALS, DEFAULT_MAX_ARRIVALS)
+        fields[vol.Required(CONF_MAX_ARRIVALS, default=max_default)] = vol.All(
+            vol.Coerce(int), vol.Range(min=1, max=10)
+        )
+        return vol.Schema(fields)
+
+    def _entry_display_name(self) -> str:
+        """Station name, or 'From → To' for a train route."""
+        data = self.config_entry.data
+        if self._is_train:
+            return (
+                f"{data.get(CONF_FROM_STATION_NAME, '?')} → "
+                f"{data.get(CONF_TO_STATION_NAME, '?')}"
+            )
+        return data.get(CONF_STATION_NAME, "Unknown")
+
+
+def _parse_bus_lines(raw: str) -> list[str]:
+    """Split a comma-separated lines field into trimmed, non-empty line numbers."""
+    return [line.strip() for line in raw.split(",") if line.strip()]

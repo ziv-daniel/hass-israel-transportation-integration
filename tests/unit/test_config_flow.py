@@ -8,15 +8,27 @@ import pytest
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.israel_transportation.gov_api import (
     ApiConnectionError as GovApiConnectionError,
 )
 from custom_components.israel_transportation.const import (
     CONF_BUS_LINES,
+    CONF_FROM_STATION,
+    CONF_FROM_STATION_NAME,
+    CONF_MAX_ARRIVALS,
     CONF_STATION_ID,
     CONF_STATION_NAME,
+    CONF_TO_STATION,
+    CONF_TO_STATION_NAME,
+    CONF_TRANSPORT_TYPE,
+    CONF_UPDATE_INTERVAL,
+    DEFAULT_MAX_ARRIVALS,
+    DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    TRANSPORT_TYPE_BUS,
+    TRANSPORT_TYPE_TRAIN,
     ERROR_STATION_NOT_FOUND,
 )
 
@@ -755,3 +767,91 @@ class TestFindStationByInput:
 
     def test_returns_none_when_nothing_matches(self):
         assert self._flow()._find_station_by_input(self.STATIONS, "nowhere") is None
+
+
+# ---------------------------------------------------------------------------
+# Options flow for train entries (hacs/default#10146 item 4, #70)
+# ---------------------------------------------------------------------------
+
+
+def _train_entry() -> MockConfigEntry:
+    return MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_TRAIN,
+            CONF_FROM_STATION: "9600",
+            CONF_TO_STATION: "3700",
+            CONF_FROM_STATION_NAME: "Sderot",
+            CONF_TO_STATION_NAME: "Tel Aviv Savidor",
+            CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
+            CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_options_flow_train_has_no_bus_lines_field(hass: HomeAssistant):
+    """A train entry's options form only offers interval and max arrivals."""
+    import custom_components.israel_transportation.config_flow  # noqa: F401
+
+    entry = _train_entry()
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+
+    assert result["type"] == FlowResultType.FORM
+    fields = {str(key) for key in result["data_schema"].schema}
+    assert fields == {CONF_UPDATE_INTERVAL, CONF_MAX_ARRIVALS}
+    assert result["description_placeholders"]["station_name"] == (
+        "Sderot → Tel Aviv Savidor"
+    )
+
+
+@pytest.mark.asyncio
+async def test_options_flow_train_saves_without_bus_lines(hass: HomeAssistant):
+    """Saving a train entry's options works and stores no bus lines."""
+    import custom_components.israel_transportation.config_flow  # noqa: F401
+
+    entry = _train_entry()
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_UPDATE_INTERVAL: 120, CONF_MAX_ARRIVALS: 4}
+    )
+
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.data[CONF_UPDATE_INTERVAL] == 120
+    assert entry.data[CONF_MAX_ARRIVALS] == 4
+    assert CONF_BUS_LINES not in entry.data
+
+
+@pytest.mark.asyncio
+async def test_options_flow_bus_still_requires_lines(hass: HomeAssistant):
+    """Bus entries keep the lines field and the no_lines error."""
+    import custom_components.israel_transportation.config_flow  # noqa: F401
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={
+            CONF_TRANSPORT_TYPE: TRANSPORT_TYPE_BUS,
+            CONF_STATION_ID: "24068",
+            CONF_STATION_NAME: "Test Station",
+            CONF_BUS_LINES: ["249", "40"],
+            CONF_UPDATE_INTERVAL: DEFAULT_SCAN_INTERVAL.total_seconds(),
+            CONF_MAX_ARRIVALS: DEFAULT_MAX_ARRIVALS,
+        },
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert CONF_BUS_LINES in {str(key) for key in result["data_schema"].schema}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {CONF_BUS_LINES: " , ", CONF_UPDATE_INTERVAL: 60, CONF_MAX_ARRIVALS: 3},
+    )
+
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {"base": "no_lines"}
+    assert entry.data[CONF_BUS_LINES] == ["249", "40"]
