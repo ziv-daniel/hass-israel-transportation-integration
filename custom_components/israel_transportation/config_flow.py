@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from functools import partial
 from typing import Any, Optional
 
 import aiohttp
@@ -185,8 +186,10 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 else:
                     return await self.async_step_station_config()
 
-        # Check if GTFS data is available
-        gtfs_available = is_gtfs_data_available()
+        # Check if GTFS data is available. Every cities-index helper runs in the
+        # executor: a background GTFS refresh can clear the cache at any moment,
+        # and a cold read parses ~7.5 MB of JSON.
+        gtfs_available = await self.hass.async_add_executor_job(is_gtfs_data_available)
 
         # Build selection options based on transport type
         if self._transport_type == TRANSPORT_TYPE_TRAIN:
@@ -296,8 +299,13 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Get cities list - shows 3 closest first (if coordinates available), then all others alphabetically
         # No filtering by min_stations - shows ALL cities (matching self._transport_type,
         # e.g. only light-rail-served cities when configuring a light rail sensor)
-        cities = get_cities_list(
-            home_lat=home_lat, home_lon=home_lon, transport_type=self._transport_type
+        cities = await self.hass.async_add_executor_job(
+            partial(
+                get_cities_list,
+                home_lat=home_lat,
+                home_lon=home_lon,
+                transport_type=self._transport_type,
+            )
         )
 
         if not cities:
@@ -375,7 +383,9 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Get ALL cities (no minimum station filter), still restricted to the
         # transport type being configured so bus/light-rail don't leak into
         # each other's pickers.
-        cities = get_all_cities_list(transport_type=self._transport_type)
+        cities = await self.hass.async_add_executor_job(
+            get_all_cities_list, self._transport_type
+        )
 
         if not cities:
             return await self.async_step_station_config()
@@ -434,8 +444,8 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_station_config()
 
             # Get station details from GTFS data and match user input
-            stations = get_stations_for_city(
-                self._selected_city, transport_type=self._transport_type
+            stations = await self.hass.async_add_executor_job(
+                get_stations_for_city, self._selected_city, self._transport_type
             )
             selected_station = self._find_station_by_input(stations, station_input)
 
@@ -499,8 +509,10 @@ class SilentBusConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             _LOGGER.debug(
                 "Fetching stations for city: %r", self._selected_city or "Other"
             )
-            stations = get_stations_for_city(
-                self._selected_city or "Other", transport_type=self._transport_type
+            stations = await self.hass.async_add_executor_job(
+                get_stations_for_city,
+                self._selected_city or "Other",
+                self._transport_type,
             )
             _LOGGER.debug(
                 "Found %d stations for city %r", len(stations), self._selected_city
