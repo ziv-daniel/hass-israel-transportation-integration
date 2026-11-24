@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.4] - 2026-11-24
+
 ### Fixed
 - The config flow no longer reads the station index (`cities_index.json`, about 7.5 MB) on the event loop. This could happen on the city and station pickers after a background GTFS refresh cleared the cache. Every index lookup now runs in the executor (#68).
 - With two or more stations configured, the `update_lines` service rewrote the first station's lines no matter which sensor it targeted, and `refresh_data` with an `entity_id` always refreshed the first station. Both services now resolve the target through the entity registry and act only on that station. An entity that isn't an Israel Transportation sensor now gets a clear error (#69).
